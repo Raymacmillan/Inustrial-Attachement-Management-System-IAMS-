@@ -38,3 +38,13 @@ CREATE POLICY "Everyone can view organizations"
 CREATE POLICY "Organizations can update their own profile" 
   ON organization_profiles FOR UPDATE 
   USING (auth.uid() = id);
+
+ALTER TABLE organization_profiles 
+ADD COLUMN IF NOT EXISTS job_description TEXT,
+ADD COLUMN IF NOT EXISTS requires_cv BOOLEAN DEFAULT true,
+ADD COLUMN IF NOT EXISTS requires_transcript BOOLEAN DEFAULT true,
+ADD COLUMN IF NOT EXISTS onboarding_complete BOOLEAN DEFAULT false;
+ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
+
+
+COMMENT ON COLUMN organization_profiles.job_description IS 'Detailed vacancy information for the matching engine';

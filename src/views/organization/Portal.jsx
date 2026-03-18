@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { UserAuth } from "../../context/AuthContext";
 import StatCard from "../../components/ui/StatCard";
 import Button from "../../components/ui/Button";
@@ -11,12 +12,16 @@ import {
   Plus,
   Headphones,
   Loader2,
+  CheckCircle2,
+  AlertCircle,
 } from "lucide-react";
 
 export default function OrgPortal() {
   const { user, loading: authLoading } = UserAuth();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  const navigate = useNavigate();
 
   useEffect(() => {
     const loadOrgData = async () => {
@@ -46,8 +51,7 @@ export default function OrgPortal() {
           </p>
         </div>
       ) : (
-        <div className="w-full max-w-7xl mx-auto space-y-10 animate-in fade-in zoom-in-95 duration-500 px-4 sm:px-0">
-
+        <div className="w-full max-w-7xl mx-auto space-y-10 animate-in fade-in zoom-in-95 duration-500 px-4 sm:px-0 pb-10">
           {/* ── Header ── */}
           <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 border-b border-gray-100 pb-8">
             <div className="min-w-0">
@@ -68,7 +72,10 @@ export default function OrgPortal() {
             </div>
 
             <div className="shrink-0">
-              <Button className="flex items-center justify-center gap-2 !py-2.5 !px-6 !text-sm lg:!text-base shadow-lg shadow-brand-900/10">
+              <Button
+                onClick={() => navigate("/org/requirements")}
+                className="flex items-center justify-center gap-2 py-2.5! px-6! text-sm! lg:text-base! shadow-lg shadow-brand-900/10"
+              >
                 <Plus size={18} /> Post New Vacancy
               </Button>
             </div>
@@ -101,46 +108,91 @@ export default function OrgPortal() {
             />
           </div>
 
-          {/* ── Two-column section ──────────────────────────────────────────
-              KEY FIX: use CSS grid with grid-cols instead of flex-row.
-              Grid children automatically stretch to the tallest sibling —
-              no flex-1, min-h, or items-stretch hacks needed.
-              On mobile: single column, cards stack naturally.
-              On desktop (lg): 2/3 + 1/3 split, always same height.
-          ─────────────────────────────────────────────────────────────────── */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Left Section: Skills & Description (Spans 2 columns) */}
+            <div className="lg:col-span-2 space-y-8">
+              {/* Required Skills Card */}
+              <div className="card p-6 sm:p-8 bg-white shadow-sm border border-gray-100 flex flex-col">
+                <h2 className="font-display text-2xl text-brand-900 mb-6 flex items-center gap-2 font-bold">
+                  <Target className="text-brand-600" size={24} /> Required
+                  Skills
+                </h2>
+                <div className="flex flex-wrap gap-2 sm:gap-3 flex-1 content-start">
+                  {profile?.required_skills?.length > 0 ? (
+                    profile.required_skills.map((skill, idx) => (
+                      <span
+                        key={idx}
+                        className="px-3 py-1.5 sm:px-4 sm:py-2 bg-brand-50 text-brand-700 rounded-lg font-bold text-xs sm:text-sm border border-brand-100 whitespace-nowrap"
+                      >
+                        {skill}
+                      </span>
+                    ))
+                  ) : (
+                    <p className="text-gray-400 italic">
+                      No requirements listed yet. Update your profile to attract
+                      students.
+                    </p>
+                  )}
+                </div>
+              </div>
 
-            {/* Skills card — spans 2 of 3 columns on desktop */}
-            <div className="lg:col-span-2 card p-6 sm:p-8 bg-white shadow-sm border border-gray-100 flex flex-col">
-              <h2 className="font-display text-2xl text-brand-900 mb-6 flex items-center gap-2">
-                <Target className="text-brand-600" size={24} /> Required Skills
-              </h2>
-              <div className="flex flex-wrap gap-2 sm:gap-3 flex-1 content-start">
-                {profile?.required_skills?.length > 0 ? (
-                  profile.required_skills.map((skill, idx) => (
+              {/* Vacancy Overview Card */}
+              <div className="card p-6 sm:p-8 bg-white shadow-sm border border-gray-100">
+                <h2 className="font-display text-2xl text-brand-900 mb-6 flex items-center gap-2 font-bold">
+                  <FileText className="text-brand-600" size={24} /> Vacancy
+                  Overview
+                </h2>
+
+                <div className="prose prose-sm max-w-none text-gray-600">
+                  {profile?.job_description ? (
+                    <p className="whitespace-pre-wrap leading-relaxed italic border-l-4 border-brand-100 pl-4 py-1">
+                      "{profile.job_description}"
+                    </p>
+                  ) : (
+                    <p className="text-gray-400 italic">
+                      No detailed description provided. Use "Post New Vacancy"
+                      to add details for students.
+                    </p>
+                  )}
+                </div>
+
+                {/* Document Status Tags */}
+                <div className="mt-8 pt-6 border-t border-gray-50 flex flex-wrap gap-4">
+                  <div className="flex items-center gap-2">
+                    {profile?.requires_cv ? (
+                      <CheckCircle2 size={16} className="text-green-500" />
+                    ) : (
+                      <AlertCircle size={16} className="text-gray-300" />
+                    )}
                     <span
-                      key={idx}
-                      className="px-3 py-1.5 sm:px-4 sm:py-2 bg-brand-50 text-brand-700 rounded-lg font-bold text-xs sm:text-sm border border-brand-100 whitespace-nowrap"
+                      className={`text-xs font-bold uppercase tracking-widest ${profile?.requires_cv ? "text-green-700" : "text-gray-400"}`}
                     >
-                      {skill}
+                      CV Required
                     </span>
-                  ))
-                ) : (
-                  <p className="text-gray-400 italic">
-                    No requirements listed yet. Update your profile to attract
-                    students.
-                  </p>
-                )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {profile?.requires_transcript ? (
+                      <CheckCircle2 size={16} className="text-green-500" />
+                    ) : (
+                      <AlertCircle size={16} className="text-gray-300" />
+                    )}
+                    <span
+                      className={`text-xs font-bold uppercase tracking-widest ${profile?.requires_transcript ? "text-green-700" : "text-gray-400"}`}
+                    >
+                      Transcript Required
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
 
-            {/* Support card — spans 1 of 3 columns on desktop */}
-            <div className="card p-6 sm:p-8 bg-brand-900 text-white border-0 shadow-xl shadow-brand-900/20 flex flex-col">
+            {/* Right Section: Support Card (Spans 1 column) */}
+            <div className="card p-6 sm:p-8 bg-brand-900 text-white border-0 shadow-xl shadow-brand-900/20 flex flex-col h-fit">
               <div className="flex items-center gap-3 mb-4">
                 <Headphones className="text-brand-400" />
                 <h2 className="font-display text-2xl text-white">Support</h2>
               </div>
-              <p className="text-brand-300 mb-6 text-sm leading-relaxed flex-1">
+              <p className="text-brand-300 mb-6 text-sm leading-relaxed">
                 Direct assistance for UB Industrial Attachment partners.
               </p>
               <div className="space-y-4 text-xs sm:text-sm font-medium pt-6 border-t border-brand-800">
@@ -159,7 +211,6 @@ export default function OrgPortal() {
                 </div>
               </div>
             </div>
-
           </div>
         </div>
       )}
