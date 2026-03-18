@@ -6,7 +6,7 @@ import { UserAuth } from "../../context/AuthContext";
  * Standardizes the loading experience and enforces role-based access.
  */
 const ProtectedRoute = ({ children, allowedRoles = [] }) => {
-  const { session, userRole, loading } = UserAuth();
+  const { user, session, userRole, loading } = UserAuth();
   const location = useLocation();
 
  
@@ -24,7 +24,7 @@ const ProtectedRoute = ({ children, allowedRoles = [] }) => {
   }
 
   
-  if (!session) {
+  if (!user) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 

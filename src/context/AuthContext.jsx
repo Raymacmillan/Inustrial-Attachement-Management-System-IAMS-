@@ -5,6 +5,7 @@ const AuthContext = createContext({
   session: null,
   userRole: null,
   loading: true,
+  user: null,
   signInUser: async () => {},
   signUpNewUser: async () => {},
   signInWithGoogle: async () => {},
@@ -151,6 +152,7 @@ export const AuthContextProvider = ({ children }) => {
   const value = useMemo(
     () => ({
       session,
+      user: session?.user ?? null,
       userRole,
       loading,
       signInUser,

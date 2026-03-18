@@ -13,7 +13,6 @@ import NotFound from "../views/auth/NotFound";
 import ForgotPassword from "../views/auth/ForgetPassword";
 import UpdatePassword from "../views/auth/UpdatePassword";
 
-
 // Student Views (Release 1.0)
 import StudentDashboard from "../views/student/Dashboard";
 import StudentPreferences from "../views/student/Preferences";
@@ -23,6 +22,7 @@ import StudentPreferences from "../views/student/Preferences";
 // Organization Views (Release 1.0)
 import OrgPortal from "../views/organization/Portal";
 import OrgRequirements from "../views/organization/Requirements";
+import DashboardLayout from "../components/layout/DashboardLayout";
 // import SupervisorAssessment from "../views/organization/Assessment"; // Release 2.0
 
 // Coordinator Views (Release 1.0)
@@ -39,54 +39,55 @@ export const router = createBrowserRouter([
       { path: "register/student", element: <RegisterStudent /> },
       { path: "register/org", element: <RegisterOrg /> },
       { path: "unauthorized", element: <Unauthorized /> },
-      { path:"forgot-password",  element: <ForgotPassword />},
-      { path:"update-password", element: <UpdatePassword /> },
+      { path: "forgot-password", element: <ForgotPassword /> },
+      { path: "update-password", element: <UpdatePassword /> },
 
       // ── Student Routes (Release 1.0) ──
       {
         path: "student",
         element: (
-          <ProtectedRoute allowedRoles={['student']}>
+          <ProtectedRoute allowedRoles={["student"]}>
             <Outlet />
           </ProtectedRoute>
         ),
         children: [
           { path: "dashboard", element: <StudentDashboard /> },
-          { path: "preferences", element: <StudentPreferences /> }, 
+          { path: "preferences", element: <StudentPreferences /> },
           // { path: "logbook", element: <Logbook /> },
           // { path: "report", element: <StudentReport /> },
-        ]
+        ],
       },
 
       // ── Organization Routes (Release 1.0) ──
       {
         path: "org",
+        path: "org",
         element: (
-          <ProtectedRoute allowedRoles={['org']}>
-            <Outlet />
+          <ProtectedRoute allowedRoles={["org"]}>
+            <DashboardLayout>
+              <Outlet />
+            </DashboardLayout>
           </ProtectedRoute>
         ),
         children: [
           { path: "portal", element: <OrgPortal /> },
-          { path: "requirements", element: <OrgRequirements /> }, 
+          { path: "requirements", element: <OrgRequirements /> },
           // { path: "assessments", element: <SupervisorAssessment /> },
-        ]
+        ],
       },
 
       // ── Coordinator Routes (Release 1.0) ──
       {
         path: "coordinator",
         element: (
-          <ProtectedRoute allowedRoles={['coordinator']}>
+          <ProtectedRoute allowedRoles={["coordinator"]}>
             <Outlet />
           </ProtectedRoute>
         ),
-        children: [
-          { path: "matching", element: <MatchingEngine /> },
-        ]
+        children: [{ path: "matching", element: <MatchingEngine /> }],
       },
-      
-      { path: "*", element: <NotFound /> }
+
+      { path: "*", element: <NotFound /> },
     ],
   },
 ]);
