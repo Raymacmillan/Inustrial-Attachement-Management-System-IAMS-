@@ -3,6 +3,7 @@ import { UserAuth } from "../../context/AuthContext";
 import { useNavigate, Link } from "react-router-dom";
 import Input from "../../components/ui/Input";
 import Button from "../../components/ui/Button";
+import PasswordStrengthMeter from "../../components/ui/PasswordStrengthMeter";
 
 export default function RegisterStudent() {
   const [email, setEmail] = useState("");
@@ -20,24 +21,6 @@ export default function RegisterStudent() {
   const { signUpNewUser } = UserAuth();
   const navigate = useNavigate();
 
-  const getStrength = (pass) => {
-    let score = 0;
-    if (pass.length >= 8) score++;
-    if (/[A-Z]/.test(pass)) score++;
-    if (/[0-9]/.test(pass)) score++;
-    if (/[^A-Za-z0-9]/.test(pass)) score++;
-    return score;
-  };
-
-  const strength = getStrength(password);
-  const strengthColor = [
-    "bg-gray-200",
-    "bg-danger",
-    "bg-warning",
-    "bg-accent",
-    "bg-success",
-  ];
-  const strengthWidth = ["0%", "25%", "50%", "75%", "100%"];
 
   const handleRegister = async (e) => {
     e.preventDefault();
@@ -57,45 +40,54 @@ export default function RegisterStudent() {
       true,
     );
 
-
     if (success) {
       setLoading(false);
       if (DEBUG_MODE) {
         navigate("/login");
       } else {
-        setIsPendingVerification(true); 
+        setIsPendingVerification(true);
       }
-    }
-   
-    else {
-      setLoading(false); 
+    } else {
+      setLoading(false);
       setError(authError);
-      
     }
   };
 
   if (isPendingVerification) {
-  return (
-    <div className="w-full min-h-screen flex items-center justify-center bg-gray-50 px-4">
-      <div className="w-full max-w-2xl bg-white p-8 sm:p-16 rounded-3xl shadow-modal border border-gray-100 text-center animate-in fade-in zoom-in duration-500">
-        <div className="mb-10 flex justify-center">
-          <div className="h-24 w-24 bg-success/10 text-success rounded-full flex items-center justify-center animate-bounce">
-            <svg className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
-            </svg>
+    return (
+      <div className="w-full min-h-screen flex items-center justify-center bg-gray-50 px-4">
+        <div className="w-full max-w-2xl bg-white p-8 sm:p-16 rounded-3xl shadow-modal border border-gray-100 text-center animate-in fade-in zoom-in duration-500">
+          <div className="mb-10 flex justify-center">
+            <div className="h-24 w-24 bg-success/10 text-success rounded-full flex items-center justify-center animate-bounce">
+              <svg
+                className="h-12 w-12"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="3"
+                  d="M5 13l4 4L19 7"
+                />
+              </svg>
+            </div>
           </div>
+          <h2 className="font-display text-5xl text-brand-900 mb-4">
+            Check Your Email
+          </h2>
+          <p className="text-xl text-gray-500 mb-10 leading-relaxed">
+            We've sent an activation link to{" "}
+            <span className="text-brand-600 font-bold">{email}</span>.
+          </p>
+          <Button variant="secondary" onClick={() => navigate("/login")}>
+            Back to Login
+          </Button>
         </div>
-        <h2 className="font-display text-5xl text-brand-900 mb-4">Check Your Email</h2>
-        <p className="text-xl text-gray-500 mb-10 leading-relaxed">
-          We've sent an activation link to <span className="text-brand-600 font-bold">{email}</span>.
-        </p>
-        <Button variant="secondary" onClick={() => navigate("/login")}>
-          Back to Login
-        </Button>
       </div>
-    </div>
-  );
-}
+    );
+  }
 
   return (
     <div className="flex min-h-screen font-body bg-white overflow-x-hidden">
@@ -167,35 +159,21 @@ export default function RegisterStudent() {
             />
 
             <div className="space-y-4">
-              <Input
-                label="Security Password"
-                type="password"
-                placeholder="Min. 8 characters"
-                value={password}
-                onFocus={() => setIsFocused(true)}
-                onBlur={() => setIsFocused(false)}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="py-4 sm:py-5 text-lg"
-              />
-
-              {/* Strength Meter */}
-              {isFocused && (
-                <div className="pt-2 transition-all duration-300">
-                  <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full transition-all duration-700 ${strengthColor[strength]}`}
-                      style={{ width: strengthWidth[strength] }}
-                    />
-                  </div>
-                  <div className="flex justify-between items-center mt-2 text-xs font-bold uppercase tracking-widest text-gray-400">
-                    <span>Security</span>
-                    <span className={strength > 0 ? "text-brand-600" : ""}>
-                      {["Empty", "Weak", "Fair", "Good", "Strong"][strength]}
-                    </span>
-                  </div>
-                </div>
-              )}
+              <div className="relative">
+                <Input
+                  label="Security Password"
+                  type="password"
+                  value={password}
+                  onFocus={() => setIsFocused(true)}
+                  onBlur={() => setIsFocused(false)}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
+                <PasswordStrengthMeter
+                  password={password}
+                  isFocused={isFocused}
+                />
+              </div>
             </div>
 
             <div className="pt-8 sm:pt-10">
