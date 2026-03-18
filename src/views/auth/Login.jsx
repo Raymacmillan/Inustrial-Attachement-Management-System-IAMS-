@@ -1,18 +1,23 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { UserAuth } from "../../context/AuthContext";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useLocation } from "react-router-dom";
 import Input from "../../components/ui/Input";
 import Button from "../../components/ui/Button";
 
 export default function Login() {
-  const [email, setEmail] = useState("");
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { signInUser } = UserAuth();
+
+  // 1. Get messages passed from Registration or Password Reset
+  const successMsg = location.state?.message;
+
+  // Check for remembered email on mount
+  const [email, setEmail] = useState(localStorage.getItem("rememberedEmail") || "");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
-
-  const { signInUser } = UserAuth();
-  const navigate = useNavigate();
+  const [rememberMe, setRememberMe] = useState(!!localStorage.getItem("rememberedEmail"));
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -29,7 +34,9 @@ export default function Login() {
 
     if (success) {
       setLoading(false);
-      navigate("/student/dashboard");
+      // ProtectedRoute handles the specific role-based redirect, 
+      // but /dashboard is our neutral starting point
+      navigate("/dashboard");
     } else {
       setLoading(false);
       setError(authError);
@@ -38,37 +45,41 @@ export default function Login() {
 
   return (
     <div className="flex min-h-screen font-body bg-white overflow-x-hidden">
-      {/* ── LEFT PANEL: Brand Identity (Hidden on Mobile) ── */}
+      {/* ── LEFT PANEL: Neutral Brand Identity ── */}
       <div className="hidden lg:flex lg:w-1/2 bg-brand-900 items-center justify-center p-8 xl:p-16 relative overflow-hidden">
         <div className="relative z-10 max-w-lg">
-          <div className="hero-tag mb-4">University of Botswana</div>
+          <div className="hero-tag mb-4 bg-accent! text-brand-900!">Portal Access</div>
           <h1 className="font-display text-5xl xl:text-7xl text-white mb-6 leading-tight">
-            Welcome Back
+            IAMS Portal
           </h1>
           <p className="text-brand-400 text-lg xl:text-2xl font-light leading-relaxed">
-            Access your{" "}
-            <span className="text-white font-medium">
-              Industrial Attachment
-            </span>{" "}
-            portal and manage your progress with ease.
+            Connecting Botswana's <span className="text-white font-medium">Top Talent</span> with 
+            leading <span className="text-white font-medium">Industry Partners</span>.
           </p>
         </div>
         <div className="absolute inset-0 bg-radial-gradient from-brand-600/20 to-transparent pointer-events-none" />
       </div>
 
-      {/* ── RIGHT PANEL: Login Form ── */}
+      {/* ── RIGHT PANEL: Neutral Login Form ── */}
       <div className="w-full lg:w-1/2 bg-gray-50 flex flex-col">
         <div className="w-full min-h-screen lg:min-h-fit lg:my-auto lg:mx-auto lg:max-w-xl bg-white p-8 sm:p-12 md:p-16 lg:rounded-3xl shadow-none lg:shadow-modal border-0 lg:border border-gray-100 flex flex-col justify-center">
-          <div className="mb-12 text-center lg:text-left">
+          <div className="mb-10 text-center lg:text-left">
             <h2 className="font-display text-4xl sm:text-5xl text-brand-900 mb-3">
               Sign In
             </h2>
             <p className="text-lg sm:text-xl text-gray-500 font-medium">
-              Enter your official UB credentials
+              Access the Industrial Attachment Management System
             </p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-8">
+            {/* SUCCESS & ERROR CALLOUTS */}
+            {successMsg && (
+              <div className="p-4 bg-success/10 text-success rounded-xl font-bold border border-success/20 animate-in fade-in slide-in-from-top-1">
+                {successMsg}
+              </div>
+            )}
+            
             {error && (
               <div className="callout danger p-4 text-base">
                 <span className="callout-icon">🚫</span>
@@ -77,9 +88,9 @@ export default function Login() {
             )}
 
             <Input
-              label="UB Email Address"
+              label="Email Address"
               type="email"
-              placeholder="studentID@ub.ac.bw"
+              placeholder="name@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
@@ -97,7 +108,6 @@ export default function Login() {
                 className="py-4 sm:py-5 text-lg"
               />
 
-              {/* Login-Specific Helpers */}
               <div className="flex items-center justify-between px-1">
                 <label className="flex items-center gap-3 cursor-pointer group">
                   <input
@@ -119,22 +129,29 @@ export default function Login() {
               </div>
             </div>
 
-            <div className="pt-6 sm:pt-8">
+            <div className="pt-4">
               <Button type="submit" loading={loading}>
                 Access Portal
               </Button>
             </div>
 
-            <div className="text-center pt-8 pb-10 lg:pb-0">
-              <p className="text-gray-600 text-lg">
-                New to IAMS?{" "}
+           
+            <div className="text-center pt-8 border-t border-gray-100">
+              <p className="text-gray-500 mb-6 font-medium">New to IAMS? Create an account:</p>
+              <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <Link
                   to="/register/student"
-                  className="text-brand-600 font-extrabold hover:underline decoration-4 underline-offset-8"
+                  className="px-6 py-3 bg-brand-50 text-brand-600 font-black rounded-xl hover:bg-brand-100 transition-colors"
                 >
-                  Create Account
+                  Student
                 </Link>
-              </p>
+                <Link
+                  to="/register/org"
+                  className="px-6 py-3 bg-gray-100 text-brand-900 font-black rounded-xl hover:bg-gray-200 transition-colors"
+                >
+                  Organization
+                </Link>
+              </div>
             </div>
           </form>
         </div>
