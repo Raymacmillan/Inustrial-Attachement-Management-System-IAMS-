@@ -1,14 +1,16 @@
-import { useContext, useState, createContext, useEffect, useMemo } from "react"; 
+import { useContext, useState, createContext, useEffect, useMemo } from "react";
 import { supabase } from "../lib/supabaseClient";
 
 const AuthContext = createContext({
   session: null,
-  userRole: null, 
+  userRole: null,
   loading: true,
   signInUser: async () => {},
   signUpNewUser: async () => {},
   signInWithGoogle: async () => {},
   signOut: async () => {},
+  resetPassword: async () => {},
+  updatePassword: async () => {},
 });
 
 export const AuthContextProvider = ({ children }) => {
@@ -17,26 +19,49 @@ export const AuthContextProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   const isPasswordStrong = (password) => {
-    const regex = /^(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+={}\[\]:;"'<>,.?/-]).{8,}$/;
+    const regex =
+      /^(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+={}\[\]:;"'<>,.?/-]).{8,}$/;
     return regex.test(password);
   };
 
-  
   const isValidStudentId = (id) => /^\d{9}$/.test(id);
 
-  const signUpNewUser = async (email, password, metadata, restrictToUB = false) => {
+  const signUpNewUser = async (
+    email,
+    password,
+    metadata,
+    restrictToUB = false,
+  ) => {
     if (restrictToUB && !email.endsWith("@ub.ac.bw")) {
-      return { success: false, error: "Please use your official @ub.ac.bw email." };
+      return {
+        success: false,
+        error: "Please use your official @ub.ac.bw email.",
+      };
     }
-    
-   
-    if (metadata.role === 'student' && !isValidStudentId(metadata.student_id)) {
-      return { success: false, error: "Student ID must be exactly 9 digits." };
+
+    const idFromEmail = email.split("@")[0];
+
+    if (metadata.role === "student") {
+      if (!isValidStudentId(metadata.student_id)) {
+        return {
+          success: false,
+          error: "Student ID must be exactly 9 digits.",
+        };
+      }
+
+      if (idFromEmail !== metadata.student_id) {
+        return {
+          success: false,
+          error: "Your Student ID must match the ID in your email address.",
+        };
+      }
     }
-    
-    
+
     if (!isPasswordStrong(password)) {
-      return { success: false, error: "Password too weak. Use uppercase, numbers, and symbols." };
+      return {
+        success: false,
+        error: "Password too weak. Use uppercase, numbers, and symbols.",
+      };
     }
 
     const { data, error } = await supabase.auth.signUp({
@@ -47,25 +72,49 @@ export const AuthContextProvider = ({ children }) => {
           full_name: metadata.full_name,
           role: metadata.role,
           student_id: metadata.student_id || null,
-          avatar_url: metadata.avatar_url || `https://ui-avatars.com/api/?name=${metadata.full_name}`, 
+          avatar_url:
+            metadata.avatar_url ||
+            `https://ui-avatars.com/api/?name=${metadata.full_name}`,
         },
       },
     });
 
-    return error ? { success: false, error: error.message } : { success: true, data };
+    return error
+      ? { success: false, error: error.message }
+      : { success: true, data };
   };
 
   const signInUser = async (email, password) => {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    return error ? { success: false, error: error.message } : { success: true, data };
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+    return error
+      ? { success: false, error: error.message }
+      : { success: true, data };
   };
 
   const signInWithGoogle = async () => {
     const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
+      provider: "google",
       options: { redirectTo: `${window.location.origin}/onboarding` },
     });
     if (error) console.error("Google Auth Error:", error.message);
+  };
+
+  const resetPassword = async (email) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/update-password`,
+    });
+    return error ? { success: false, error: error.message } : { success: true };
+  };
+
+ const updatePassword = async (newPassword) => {
+    if (!isPasswordStrong(newPassword)) {
+      return { success: false, error: "New password does not meet security requirements." };
+    }
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    return error ? { success: false, error: error.message } : { success: true };
   };
 
   const signOut = async () => {
@@ -76,7 +125,9 @@ export const AuthContextProvider = ({ children }) => {
 
   useEffect(() => {
     const initializeAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       setSession(session);
       if (session?.user) {
         setUserRole(session.user.user_metadata.role);
@@ -86,7 +137,9 @@ export const AuthContextProvider = ({ children }) => {
 
     initializeAuth();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       setUserRole(session?.user?.user_metadata?.role || null);
       setLoading(false);
@@ -95,15 +148,20 @@ export const AuthContextProvider = ({ children }) => {
     return () => subscription.unsubscribe();
   }, []);
 
-  const value = useMemo(() => ({
-    session,
-    userRole,
-    loading,
-    signInUser,
-    signUpNewUser,
-    signInWithGoogle,
-    signOut,
-  }), [session, loading, userRole]);
+  const value = useMemo(
+    () => ({
+      session,
+      userRole,
+      loading,
+      signInUser,
+      signUpNewUser,
+      signInWithGoogle,
+      signOut,
+      resetPassword,
+      updatePassword,
+    }),
+    [session, loading, userRole],
+  );
 
   return <AuthContext value={value}>{children}</AuthContext>;
 };

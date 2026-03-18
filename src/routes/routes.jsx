@@ -1,7 +1,7 @@
 import { createBrowserRouter, Navigate, Outlet } from "react-router-dom";
 
 // Layouts
-import RootLayout from "../layouts/RootLayout";
+import RootLayout from "../components/layout/RootLayout";
 import ProtectedRoute from "../components/layout/ProtectedRoute";
 
 // Auth Views
@@ -10,6 +10,8 @@ import RegisterStudent from "../views/auth/RegisterStudent";
 import RegisterOrg from "../views/auth/RegisterOrg";
 import Unauthorized from "../views/auth/Unauthorized";
 import NotFound from "../views/auth/NotFound";
+import ForgotPassword from "../views/auth/ForgetPassword";
+import UpdatePassword from "../views/auth/UpdatePassword";
 
 // Student Views (Release 1.0)
 import StudentDashboard from "../views/student/Dashboard";
@@ -36,6 +38,8 @@ export const router = createBrowserRouter([
       { path: "register/student", element: <RegisterStudent /> },
       { path: "register/org", element: <RegisterOrg /> },
       { path: "unauthorized", element: <Unauthorized /> },
+      { path:"forgot-password",  element: <ForgotPassword />},
+      { path:"update-password", element: <UpdatePassword /> },
 
       // ── Student Routes (Release 1.0) ──
       {
