@@ -16,6 +16,7 @@ import UpdatePassword from "../views/auth/UpdatePassword";
 // Student Views (Release 1.0)
 import StudentDashboard from "../views/student/Dashboard";
 import StudentPreferences from "../views/student/Preferences";
+import StudentProfile from "../views/student/Profile";
 // import Logbook from "../views/student/Logbook"; // Release 2.0
 // import StudentReport from "../views/student/Report"; // Release 2.0
 
@@ -52,6 +53,7 @@ export const router = createBrowserRouter([
         ),
         children: [
           { path: "dashboard", element: <StudentDashboard /> },
+          { path: "profile", element: <StudentProfile /> },
           { path: "preferences", element: <StudentPreferences /> },
           // { path: "logbook", element: <Logbook /> },
           // { path: "report", element: <StudentReport /> },

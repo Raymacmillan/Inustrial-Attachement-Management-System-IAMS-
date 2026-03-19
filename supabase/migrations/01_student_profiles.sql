@@ -45,3 +45,19 @@ CREATE POLICY "Students can insert their own profile"
 CREATE POLICY "Students can update their own profile" 
   ON student_profiles FOR UPDATE 
   USING (auth.uid() = id);
+
+ALTER TABLE student_profiles 
+  ADD COLUMN IF NOT EXISTS gpa NUMERIC(3,2),
+  ADD COLUMN IF NOT EXISTS phone_number TEXT,
+  ADD COLUMN IF NOT EXISTS gender TEXT,
+  ADD COLUMN IF NOT EXISTS year_of_study INTEGER DEFAULT 3,
+  ADD COLUMN IF NOT EXISTS cv_url TEXT,            
+  ADD COLUMN IF NOT EXISTS transcript_url TEXT,   
+  ADD COLUMN IF NOT EXISTS bio TEXT,
+  ADD COLUMN IF NOT EXISTS preferred_work_mode TEXT DEFAULT 'On-site';
+
+ALTER TABLE student_profiles 
+  ADD COLUMN updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now());
+
+
+COMMENT ON COLUMN student_profiles.skills IS 'Primary array for the Intelligent Matching heuristic engine';
