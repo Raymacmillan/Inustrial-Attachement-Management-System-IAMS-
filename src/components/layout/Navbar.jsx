@@ -2,7 +2,7 @@ import { Menu } from 'lucide-react';
 import { useAvatar } from "../../context/AvatarContext";
 
 export default function Navbar({ onMenuClick }) {
-  const { avatarUrl, initials } = useAvatar();
+  const { avatarUrl, initials } = useAvatar() || {};
 
   return (
     <nav className="h-20 bg-white border-b border-gray-100 px-6 flex items-center justify-between sticky top-0 z-40 w-full shrink-0">
