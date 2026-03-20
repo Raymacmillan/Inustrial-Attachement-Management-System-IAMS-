@@ -138,6 +138,7 @@ export const updateStudentPreferences = async (studentId, preferences) => {
     preferred_roles: preferences.preferred_roles || [],
     technical_skills: preferences.technical_skills || [], 
     preferred_locations: preferences.preferred_locations || [],
+    industries: preferences.industries || [], 
     min_stipend_expected: preferences.min_stipend_expected || 0, 
     updated_at: new Date().toISOString()
   };
