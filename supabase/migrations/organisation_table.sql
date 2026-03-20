@@ -46,5 +46,11 @@ ADD COLUMN IF NOT EXISTS requires_transcript BOOLEAN DEFAULT true,
 ADD COLUMN IF NOT EXISTS onboarding_complete BOOLEAN DEFAULT false;
 ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
 
+-- Remove the columns that now live in the 'vacancies' table
+ALTER TABLE organization_profiles 
+DROP COLUMN IF EXISTS required_skills,
+DROP COLUMN IF EXISTS available_slots,
+DROP COLUMN IF EXISTS job_description;
+
 
 COMMENT ON COLUMN organization_profiles.job_description IS 'Detailed vacancy information for the matching engine';
