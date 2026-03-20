@@ -8,18 +8,21 @@ import {
   LogOut,
   X,
   Briefcase,
+  User,
+  CheckCircle
 } from "lucide-react";
 
 export default function Sidebar({ isOpen, setIsOpen }) {
-  // Ensure we pull signOut from context
   const { userRole, signOut } = UserAuth();
   const location = useLocation();
 
   const studentLinks = [
-    { name: "My Dashboard", path: "/student/dashboard", icon: <LayoutDashboard size={20} /> },
-    { name: "Find Attachment", path: "/student/browse", icon: <Briefcase size={20} /> },
-    { name: "My Applications", path: "/student/applications", icon: <ClipboardList size={20} /> },
-  ];
+  { name: "My Dashboard", path: "/student/dashboard", icon: <LayoutDashboard size={20} /> },
+  { name: "Find Attachment", path: "/student/browse", icon: <Briefcase size={20} /> },
+  { name: "My Applications", path: "/student/applications", icon: <CheckCircle size={20} /> },
+  { name: "Weekly Logbook", path: "/student/logbook", icon: <ClipboardList size={20} /> }, 
+  { name: "My Profile", path: "/student/profile", icon: <User size={20} /> },
+];
 
   const orgLinks = [
     { name: "Employer Portal", path: "/org/portal", icon: <LayoutDashboard size={20} /> },
@@ -31,23 +34,23 @@ export default function Sidebar({ isOpen, setIsOpen }) {
 
   return (
     <>
-      {/* Mobile Overlay: Z-index must be high to cover the main content */}
+      {/* Mobile Overlay */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-brand-950/60 z-60 lg:hidden backdrop-blur-sm transition-opacity"
+          className="fixed inset-0 bg-brand-950/60 z-[60] lg:hidden backdrop-blur-sm transition-opacity"
           onClick={() => setIsOpen(false)}
         />
       )}
 
-      {/* Sidebar: z-70 ensures it sits above the overlay */}
+      {/* Sidebar: h-screen ensures it takes full height */}
       <aside
         className={`
-        fixed inset-y-0 left-0 z-70 w-72 bg-brand-900 text-white transform transition-transform duration-300 ease-in-out shadow-2xl
-        lg:relative lg:translate-x-0 lg:z-0 lg:shadow-none h-screen shrink-0
+        fixed inset-y-0 left-0 z-[70] w-72 bg-brand-900 text-white transform transition-transform duration-300 ease-in-out shadow-2xl
+        lg:relative lg:translate-x-0 lg:z-0 lg:shadow-none h-screen shrink-0 flex flex-col
         ${isOpen ? "translate-x-0" : "-translate-x-full"}
       `}
       >
-        <div className="h-full flex flex-col p-6 overflow-y-auto overflow-x-hidden">
+        <div className="h-full flex flex-col p-6 overflow-hidden">
           {/* Logo Section */}
           <div className="flex items-center justify-between mb-10 shrink-0">
             <h2 className="font-display text-3xl font-bold tracking-tighter text-white">
@@ -61,8 +64,8 @@ export default function Sidebar({ isOpen, setIsOpen }) {
             </button>
           </div>
 
-          {/* Navigation Section */}
-          <nav className="flex-1 space-y-2 min-h-0">
+          {/* Navigation Section - overflow-y-auto only here if links exceed height */}
+          <nav className="flex-1 space-y-2 overflow-y-auto custom-scrollbar pr-2">
             {links.map((link) => (
               <Link
                 key={link.path}
