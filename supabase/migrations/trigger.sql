@@ -68,3 +68,22 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER trg_validate_week_limit
 BEFORE INSERT OR UPDATE ON logbook_weeks
 FOR EACH ROW EXECUTE FUNCTION validate_logbook_week_limit();
+
+
+-- Automatically stop searching when a student is placed
+CREATE OR REPLACE FUNCTION handle_student_placement() 
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.status = 'placed' THEN
+    UPDATE student_preferences 
+    SET is_searching = false 
+    WHERE student_id = NEW.id;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER on_student_placed
+  AFTER UPDATE ON student_profiles
+  FOR EACH ROW
+  EXECUTE FUNCTION handle_student_placement();
