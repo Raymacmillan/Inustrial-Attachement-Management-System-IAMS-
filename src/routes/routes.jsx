@@ -18,7 +18,7 @@ import StudentDashboard from "../views/student/Dashboard";
 import StudentPreferences from "../views/student/Preferences";
 import StudentProfile from "../views/student/Profile";
 import StudentLayout from "../components/layout/StudentLayout";
-import LogbookManager from "../features/logbook/LogbookManager"
+import LogbookManager from "../features/logbook/LogbookManager";
 
 // import StudentReport from "../views/student/Report"; // Release 2.0
 

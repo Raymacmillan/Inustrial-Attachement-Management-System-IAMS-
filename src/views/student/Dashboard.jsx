@@ -22,28 +22,43 @@ export default function StudentDashboard() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [student, setStudent] = useState(null);
+  const [preferences, setPreferences] = useState(null);
 
   useEffect(() => {
-    const fetchPortal = async () => {
+    const fetchPortalData = async () => {
       try {
-        const data = await studentService.getStudentProfile(user.id);
-        setStudent(data);
+        // Fetch data from both Identity (Profile) and Intent (Preferences) tables
+        const [profileData, prefData] = await Promise.all([
+          studentService.getStudentProfile(user.id),
+          studentService.getStudentPreferences(user.id)
+        ]);
+        
+        setStudent(profileData);
+        setPreferences(prefData);
       } catch (err) {
-        console.error("Dashboard Fetch Error:", err);
+        console.error("Dashboard Sync Error:", err);
       } finally {
         setLoading(false);
       }
     };
-    if (user?.id) fetchPortal();
+    if (user?.id) fetchPortalData();
   }, [user?.id]);
 
   const calculateProgress = () => {
-    if (!student) return 0;
-    let p = 20;
-    if (student.full_name) p += 20;
-    if (student.avatar_url) p += 20;
-    if (student.cv_url) p += 20;
-    if (student.transcript_url) p += 20;
+    let p = 0;
+    if (!student) return p;
+
+    // Profile Data (60%)
+    if (student.full_name) p += 15;
+    if (student.avatar_url) p += 15;
+    if (student.cv_url) p += 15;
+    if (student.transcript_url) p += 15;
+
+    // Preferences Data (40%)
+    if (preferences?.technical_skills?.length > 0) p += 20;
+    if (preferences?.preferred_roles?.length > 0) p += 10;
+    if (preferences?.preferred_locations?.length > 0) p += 10;
+
     return p;
   };
 
@@ -68,45 +83,49 @@ export default function StudentDashboard() {
           <div className="space-y-4 max-w-2xl">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/20 text-brand-200 text-[9px] md:text-[10px] font-bold uppercase tracking-widest">
               <GraduationCap size={14} className="text-brand-400" />
-              3rd Year Computer Science
+              {student?.major || "3rd Year Computer Science"}
             </div>
             <div className="space-y-2">
               <h1 className="text-3xl md:text-5xl lg:text-6xl font-display font-black tracking-tight text-white leading-tight">
                 Dumelang, {student?.full_name?.split(" ")[0] || "Ray"}
               </h1>
               <p className="text-brand-100/80 font-medium text-sm md:text-lg max-w-md leading-relaxed">
-                Ready to start your attachment? Track your matching status and log your 8-week journey here.
+                Track your matching status and log your attachment journey here.
               </p>
             </div>
           </div>
 
           <Button
             variant="secondary"
-            className="rounded-xl h-9! md:h-10! w-auto! px-4! md:px-6! self-center font-bold text-[9px] md:text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 group shadow-lg shadow-black/30 shrink-0 border-none transition-all hover:scale-[1.02]"
+            size="lg"
+            className="group transition-all hover:scale-[1.02] border-none"
             onClick={() => navigate("/student/profile")}
           >
-            <span className="whitespace-nowrap leading-none">Complete Profile</span>
-            <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform shrink-0" />
+            <span className="font-bold text-[10px] uppercase tracking-widest">Manage Identity</span>
+            <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
           </Button>
         </div>
         <div className="absolute -bottom-24 -right-24 w-96 h-96 bg-brand-500/10 rounded-full blur-[120px]" />
       </section>
 
-      {/* ── Quick Stats: Changed to xl:grid-cols-3 to prevent iPad squashing ── */}
+      {/* ── Quick Stats ── */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-6">
-        <StatCard title="Placement Status" value={student?.attachment_status || "Pending"} icon={Briefcase} colorClass="border-brand-600" />
-        <StatCard title="Logbook Status" value="Week 0 / 8" icon={ClipboardList} colorClass="border-brand-200" />
-        <StatCard title="Matching Tier" value={student?.gpa >= 3.5 ? "Priority" : "Standard"} icon={LayoutDashboard} colorClass="border-brand-400" />
+        <StatCard title="Placement Status" value={student?.status || "Pending"} icon={Briefcase} colorClass="border-brand-600" />
+        <StatCard title="Skills Listed" value={`${preferences?.technical_skills?.length || 0} Tags`} icon={Target} colorClass="border-brand-200" />
+        <StatCard title="Matching Tier" value={parseFloat(student?.gpa) >= 3.5 ? "Priority" : "Standard"} icon={LayoutDashboard} colorClass="border-brand-400" />
       </div>
 
-      {/* ── Action Center: xl:grid-cols-3 gives Profile & Resources more space ── */}
+      {/* ── Action Center ── */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 md:gap-8">
         
-        {/* Profile Strength & Skills Cloud (Spans 2 columns on large screens) */}
+        {/* Profile Strength & Preferences Cloud */}
         <div className="xl:col-span-2 card p-6 md:p-8 bg-white border border-gray-100 rounded-[1.5rem] md:rounded-[2.5rem] shadow-sm space-y-8">
           <div className="space-y-6">
             <div className="flex justify-between items-center">
-              <h3 className="text-lg font-display font-bold text-brand-900">Profile Readiness</h3>
+              <div>
+                <h3 className="text-lg font-display font-bold text-brand-900">Application Readiness</h3>
+                <p className="text-xs text-gray-500 font-medium">Profile completeness and matching intent</p>
+              </div>
               <span className="text-2xl font-black text-brand-600">{progress}%</span>
             </div>
 
@@ -117,26 +136,39 @@ export default function StudentDashboard() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <DocStatus label="CV Document" uploaded={!!student?.cv_url} />
               <DocStatus label="Transcript" uploaded={!!student?.transcript_url} />
-              <DocStatus label="Student ID" uploaded={!!student?.student_id} />
-              <DocStatus label="Skills Tags" uploaded={student?.skills?.length > 0} />
+              <DocStatus label="Matching Intent" uploaded={preferences?.preferred_roles?.length > 0} />
+              <DocStatus label="Target Locations" uploaded={preferences?.preferred_locations?.length > 0} />
             </div>
           </div>
 
-          {/* ── Skills Overview ── */}
+          {/* ── Skills Overview from Preferences ── */}
           <div className="pt-6 border-t border-gray-50">
-            <div className="flex items-center gap-2 mb-4">
-              <Target size={16} className="text-brand-600" />
-              <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Active Skill Set</h4>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Target size={16} className="text-brand-600" />
+                <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Your Expertise</h4>
+              </div>
+              <button 
+                onClick={() => navigate("/student/preferences")}
+                className="text-[10px] font-bold text-brand-600 hover:underline cursor-pointer"
+              >
+                Edit Preferences
+              </button>
             </div>
             <div className="flex flex-wrap gap-2">
-              {student?.skills?.length > 0 ? (
-                student.skills.map((skill, index) => (
+              {preferences?.technical_skills?.length > 0 ? (
+                preferences.technical_skills.map((skill, index) => (
                   <span key={index} className="px-3 py-1.5 bg-brand-50 text-brand-700 rounded-lg font-bold text-[9px] md:text-[10px] border border-brand-100">
                     {skill}
                   </span>
                 ))
               ) : (
-                <p className="text-[10px] text-gray-400 italic">No technical skills added yet. Update your profile to appear in matches.</p>
+                <div className="flex flex-col gap-2">
+                   <p className="text-[10px] text-gray-400 italic">No expertise added to your matching intent.</p>
+                   <Button size="sm" variant="ghost" onClick={() => navigate("/student/preferences")}>
+                     Add Skills Now
+                   </Button>
+                </div>
               )}
             </div>
           </div>
@@ -145,30 +177,24 @@ export default function StudentDashboard() {
             <div className="p-4 md:p-5 bg-orange-50 rounded-2xl border border-orange-100 flex items-start gap-4">
               <FileWarning size={18} className="text-orange-500 shrink-0 mt-0.5" />
               <p className="text-[11px] md:text-xs text-orange-900 leading-relaxed font-medium">
-                Ray, your profile is incomplete. Organizations at UB look for students with full documentation first.
+                Your portal is not fully synced. Complete your **Profile** and **Career Preferences** to increase your chances of placement.
               </p>
             </div>
           )}
         </div>
 
-        {/* UB Resources Box */}
-        <div className="p-6 md:p-8 bg-gray-50 border border-gray-100 rounded-[1.5rem] md:rounded-[2.5rem] flex flex-col justify-between gap-6">
+        {/* Resources Sidebar */}
+        <div className="p-6 md:p-8 bg-gray-50 border border-gray-100 rounded-[1.5rem] md:rounded-[2.5rem] flex flex-col gap-6">
           <div className="space-y-3">
             <h3 className="text-xl md:text-2xl font-display font-bold text-brand-900">Resources</h3>
             <p className="text-xs md:text-sm text-gray-500 leading-relaxed font-medium">
-              Access University of Botswana documents for CSI382.
+              UB departmental documents for your attachment phase.
             </p>
           </div>
 
           <div className="space-y-2 md:space-y-3">
-            <button className="w-full flex items-center justify-between p-4 bg-white rounded-xl border border-gray-100 hover:border-brand-200 transition-all group cursor-pointer text-left">
-              <span className="text-[11px] md:text-xs font-bold text-gray-700">Attachment Handbook</span>
-              <ExternalLink size={14} className="text-gray-400 group-hover:text-brand-600" />
-            </button>
-            <button className="w-full flex items-center justify-between p-4 bg-white rounded-xl border border-gray-100 hover:border-brand-200 transition-all group cursor-pointer text-left">
-              <span className="text-[11px] md:text-xs font-bold text-gray-700">Logbook Template (PDF)</span>
-              <ExternalLink size={14} className="text-gray-400 group-hover:text-brand-600" />
-            </button>
+            <ResourceButton label="Attachment Handbook" />
+            <ResourceButton label="Logbook Template" />
           </div>
         </div>
       </div>
@@ -184,5 +210,14 @@ function DocStatus({ label, uploaded }) {
         {label}
       </span>
     </div>
+  );
+}
+
+function ResourceButton({ label }) {
+  return (
+    <button className="w-full flex items-center justify-between p-4 bg-white rounded-xl border border-gray-100 hover:border-brand-200 transition-all group cursor-pointer text-left">
+      <span className="text-[11px] md:text-xs font-bold text-gray-700">{label}</span>
+      <ExternalLink size={14} className="text-gray-400 group-hover:text-brand-600" />
+    </button>
   );
 }

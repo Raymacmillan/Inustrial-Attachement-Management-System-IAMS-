@@ -114,3 +114,43 @@ export const deleteDocument = async (userId, bucketName) => {
   
   return true;
 };
+
+/**
+ * @description Fetches the student's internship preferences (Skills, Roles, etc.)
+ */
+export const getStudentPreferences = async (studentId) => {
+  const { data, error } = await supabase
+    .from('student_preferences')
+    .select('*')
+    .eq('student_id', studentId)
+    .single();
+
+  if (error && error.code !== 'PGRST116') throw error;
+  return data;
+};
+
+/**
+ * @description Updates or Creates student internship intent.
+ */
+export const updateStudentPreferences = async (studentId, preferences) => {
+  const cleanData = {
+    student_id: studentId,
+    preferred_roles: preferences.preferred_roles || [],
+    technical_skills: preferences.technical_skills || [], 
+    preferred_locations: preferences.preferred_locations || [],
+    min_stipend_expected: preferences.min_stipend_expected || 0, 
+    updated_at: new Date().toISOString()
+  };
+
+  const { data, error } = await supabase
+    .from('student_preferences')
+    .upsert(cleanData, { onConflict: 'student_id' }) 
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Supabase Error Detail:", error.message, error.details);
+    throw error;
+  }
+  return data;
+};

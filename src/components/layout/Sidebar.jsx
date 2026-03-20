@@ -19,6 +19,7 @@ export default function Sidebar({ isOpen, setIsOpen }) {
   const studentLinks = [
   { name: "My Dashboard", path: "/student/dashboard", icon: <LayoutDashboard size={20} /> },
   { name: "Find Attachment", path: "/student/browse", icon: <Briefcase size={20} /> },
+  { name: "Career Preferences", path: "/student/preferences", icon: <Briefcase size={20} /> },
   { name: "My Applications", path: "/student/applications", icon: <CheckCircle size={20} /> },
   { name: "Weekly Logbook", path: "/student/logbook", icon: <ClipboardList size={20} /> }, 
   { name: "My Profile", path: "/student/profile", icon: <User size={20} /> },

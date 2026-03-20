@@ -29,6 +29,19 @@ CREATE TABLE IF NOT EXISTS student_preferences (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
 
+ALTER TABLE student_preferences 
+ADD COLUMN IF NOT EXISTS technical_skills TEXT[] NOT NULL DEFAULT '{}',
+ADD COLUMN IF NOT EXISTS min_stipend_expected INT DEFAULT 0;
+
+CREATE INDEX IF NOT EXISTS idx_student_prefs_tech_skills ON student_preferences USING GIN (technical_skills);
+
+ALTER TABLE student_preferences 
+DROP CONSTRAINT IF EXISTS student_preferences_student_id_key,
+ADD CONSTRAINT student_preferences_student_id_key UNIQUE (student_id);
+
+-- 4. CRITICAL: Refresh the API cache
+NOTIFY pgrst, 'reload schema';
+
 -- ── ROLE-BASED ACCESS CONTROL (RBAC) ──
 
 -- Helper function to verify user roles server-side
@@ -38,7 +51,7 @@ BEGIN
   RETURN EXISTS (
     SELECT 1 FROM user_roles 
     WHERE user_id = auth.uid() 
-    AND role = target_role
+    AND LOWER(role) = LOWER(target_role) 
   );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -65,3 +78,16 @@ CREATE POLICY "Coordinators: View all for matching"
 -- Indexes for the GIN (Generalized Inverted Index) to speed up array searches by the matching engine
 CREATE INDEX IF NOT EXISTS idx_student_prefs_roles ON student_preferences USING GIN (preferred_roles);
 CREATE INDEX IF NOT EXISTS idx_student_prefs_locations ON student_preferences USING GIN (preferred_locations);
+
+
+
+/* Dropped these policies to fix the infinite recursion loop */
+DROP POLICY IF EXISTS "Coordinators: View all for matching" ON student_preferences;
+DROP POLICY IF EXISTS "Students: Manage own preferences" ON student_preferences;
+
+CREATE POLICY "student_prefs_owner"
+ON student_preferences FOR ALL
+USING (auth.uid() = student_id)
+WITH CHECK (auth.uid() = student_id);
+
+NOTIFY pgrst, 'reload schema'; ended up doing this to drop the recursion problem
