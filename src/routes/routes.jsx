@@ -18,7 +18,8 @@ import StudentDashboard from "../views/student/Dashboard";
 import StudentPreferences from "../views/student/Preferences";
 import StudentProfile from "../views/student/Profile";
 import StudentLayout from "../components/layout/StudentLayout";
-// import Logbook from "../views/student/Logbook"; // Release 2.0
+import LogbookManager from "../features/logbook/LogbookManager"
+
 // import StudentReport from "../views/student/Report"; // Release 2.0
 
 // Organization Views (Release 1.0)
@@ -58,7 +59,7 @@ export const router = createBrowserRouter([
           { path: "dashboard", element: <StudentDashboard /> },
           { path: "profile", element: <StudentProfile /> },
           { path: "preferences", element: <StudentPreferences /> },
-          // { path: "logbook", element: <Logbook /> },
+          { path: "logbook", element: <LogbookManager /> },
           // { path: "report", element: <StudentReport /> },
         ],
       },
