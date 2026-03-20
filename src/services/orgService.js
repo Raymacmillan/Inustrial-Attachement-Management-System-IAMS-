@@ -1,7 +1,7 @@
 import { supabase } from '../lib/supabaseClient';
 
 /**
- * @description Fetches the profile for the currently logged-in organization.
+ * @description Fetches the base profile for the organization.
  */
 export const getOrgProfile = async (orgId) => {
   const { data, error } = await supabase
@@ -15,52 +15,61 @@ export const getOrgProfile = async (orgId) => {
 };
 
 /**
- * @description Updates organization profile details (Location, Skills, Slots, Description).
+ * @description Updates basic organization identity details.
  */
 export const updateOrgProfile = async (orgId, updates) => {
   const cleanData = {
     location: updates.location,
-    available_slots: updates.available_slots,
-    work_mode: updates.work_mode,
-    required_skills: updates.required_skills,
-    job_description: updates.job_description,
     requires_cv: updates.requires_cv,
     requires_transcript: updates.requires_transcript,
     onboarding_complete: true,
     updated_at: new Date().toISOString()
   };
 
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from('organization_profiles')
     .update(cleanData)
-    .eq('id', orgId)
-    .select()
-    .single();
+    .eq('id', orgId);
+
+  if (error) throw error;
+};
+
+/**
+ * @description Fetches all vacancies for a specific organization.
+ */
+export const getOrgVacancies = async (orgId) => {
+  const { data, error } = await supabase
+    .from('organization_vacancies')
+    .select('*')
+    .eq('org_id', orgId)
+    .order('created_at', { ascending: false });
 
   if (error) throw error;
   return data;
 };
 
 /**
- * @description Fetches all organizations for the Student Matching Engine.
- * Now includes vacancy details and filters out organizations with 0 slots.
+ * @description Posts a new vacancy or updates an existing one (Upsert).
  */
-export const getAllOrganizations = async () => {
+export const upsertVacancy = async (orgId, vacancyData) => {
+  const cleanData = {
+    org_id: orgId,
+    role_title: vacancyData.role_title || "General Internship",
+    job_description: vacancyData.job_description,
+    required_skills: vacancyData.required_skills,
+    available_slots: vacancyData.available_slots,
+    work_mode: vacancyData.work_mode,
+    is_active: true
+  };
+
+  // If we have an ID, we update; otherwise, Supabase inserts.
+  if (vacancyData.id) cleanData.id = vacancyData.id;
+
   const { data, error } = await supabase
-    .from('organization_profiles')
-    .select(`
-      id, 
-      org_name, 
-      location, 
-      required_skills, 
-      job_description, 
-      available_slots, 
-      work_mode,
-      requires_cv,
-      requires_transcript
-    `)
-    .gt('available_slots', 0) 
-    .order('org_name', { ascending: true });
+    .from('organization_vacancies')
+    .upsert(cleanData)
+    .select()
+    .single();
 
   if (error) throw error;
   return data;
