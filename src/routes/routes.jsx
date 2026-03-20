@@ -17,6 +17,7 @@ import UpdatePassword from "../views/auth/UpdatePassword";
 import StudentDashboard from "../views/student/Dashboard";
 import StudentPreferences from "../views/student/Preferences";
 import StudentProfile from "../views/student/Profile";
+import StudentLayout from "../components/layout/StudentLayout";
 // import Logbook from "../views/student/Logbook"; // Release 2.0
 // import StudentReport from "../views/student/Report"; // Release 2.0
 
@@ -48,7 +49,9 @@ export const router = createBrowserRouter([
         path: "student",
         element: (
           <ProtectedRoute allowedRoles={["student"]}>
-            <Outlet />
+            <StudentLayout>
+              <Outlet />
+            </StudentLayout>
           </ProtectedRoute>
         ),
         children: [
