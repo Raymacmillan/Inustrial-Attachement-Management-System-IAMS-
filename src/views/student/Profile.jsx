@@ -4,6 +4,7 @@ import { UserAuth } from "../../context/AuthContext";
 import { useAvatar } from "../../context/AvatarContext";
 import * as studentService from "../../services/studentService";
 import Input from "../../components/ui/Input";
+import Button from "../../components/ui/Button";
 import {
   Save,
   Plus,
@@ -296,13 +297,14 @@ export default function StudentProfile() {
                 onChange={(e) => setSkillInput(e.target.value)}
                 onKeyPress={(e) => e.key === "Enter" && handleAddSkill(e)}
               />
-              <button
+              <Button
                 type="button"
+                size="sm"
                 onClick={handleAddSkill}
-                className="h-10 w-10 bg-brand-600 text-white rounded-xl hover:bg-brand-700 shrink-0 transition-colors flex items-center justify-center"
+                className="shrink-0 !min-w-[40px] !w-10 !h-10 !p-0"
               >
-                <Plus size={18} />
-              </button>
+                <Plus size={16} />
+              </Button>
             </div>
             <div className="flex flex-wrap gap-2">
               {formData.skills.length === 0 && (
@@ -380,23 +382,15 @@ export default function StudentProfile() {
             </div>
 
             <div className="pt-5">
-              <button
+              <Button
                 type="submit"
-                disabled={saving}
-                className="btn-primary w-full h-11 text-sm flex items-center justify-center gap-2 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                loading={saving}
+                fullWidth
+                size="md"
               >
-                {saving ? (
-                  <>
-                    <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <Save size={15} />
-                    Save Profile
-                  </>
-                )}
-              </button>
+                <Save size={15} />
+                Save Profile
+              </Button>
             </div>
           </div>
 

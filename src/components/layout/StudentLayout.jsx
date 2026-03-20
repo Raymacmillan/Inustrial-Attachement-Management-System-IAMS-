@@ -2,13 +2,11 @@ import { useState } from "react";
 import { Outlet } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import Navbar from "./Navbar";
-import { AvatarProvider } from "../../context/AvatarContext";
 
 export default function StudentLayout() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   return (
-    <AvatarProvider>
       <div className="flex h-screen bg-[#F9FAFB] overflow-hidden font-sans">
 
         <Sidebar
@@ -29,6 +27,5 @@ export default function StudentLayout() {
 
         </div>
       </div>
-    </AvatarProvider>
   );
 }
