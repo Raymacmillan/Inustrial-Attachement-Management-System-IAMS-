@@ -40,11 +40,11 @@ export const uploadDocument = async (userId, file, bucketName) => {
   const fileExt = file.name.split(".").pop();
   const fileName = `${userId}-${bucketName}.${fileExt}`;
 
-  const { data: uploadData, error: uploadError } = await supabase.storage
+  const { error: uploadError } = await supabase.storage
     .from(bucketName)
-    .upload(fileName, file, { 
-      contentType: 'application/pdf', 
-      upsert: true 
+    .upload(fileName, file, {
+      contentType: "application/pdf",
+      upsert: true,
     });
 
   if (uploadError) {
@@ -57,7 +57,16 @@ export const uploadDocument = async (userId, file, bucketName) => {
 };
 
 /**
- * @description Uploads a profile picture to the 'avatars' bucket
+ * @description Uploads a profile picture to the 'avatars' bucket.
+ *
+ * Cache-busting strategy: Supabase Storage returns the same public URL
+ * every time because the filename doesn't change (upsert overwrites the file
+ * in place). The browser caches the old image against that URL and won't
+ * re-fetch it even though the file on the server has changed.
+ *
+ * Fix: append `?t=<timestamp>` to the public URL before saving it to the DB.
+ * Every upload produces a unique URL, forcing the browser to fetch fresh.
+ * The `?t=` param is ignored by Supabase Storage — it just prevents caching.
  */
 export const uploadAvatar = async (userId, file) => {
   const fileExt = file.name.split(".").pop();
@@ -77,5 +86,31 @@ export const uploadAvatar = async (userId, file) => {
 
   const { data } = supabase.storage.from("avatars").getPublicUrl(fileName);
 
-  return data.publicUrl;
+  const cacheBustedUrl = `${data.publicUrl}?t=${Date.now()}`;
+
+  return cacheBustedUrl;
+};
+
+/**
+ * @description Removes a document from storage and clears the DB link
+ */
+export const deleteDocument = async (userId, bucketName) => {
+  const fileExt = "pdf"; 
+  const fileName = `${userId}-${bucketName}.${fileExt}`;
+
+  const { error: storageError } = await supabase.storage
+    .from(bucketName)
+    .remove([fileName]);
+
+  if (storageError) throw storageError;
+
+  const fieldName = bucketName === "cvs" ? "cv_url" : "transcript_url";
+  const { error: dbError } = await supabase
+    .from("student_profiles")
+    .update({ [fieldName]: null })
+    .eq("id", userId);
+
+  if (dbError) throw dbError;
+  
+  return true;
 };
