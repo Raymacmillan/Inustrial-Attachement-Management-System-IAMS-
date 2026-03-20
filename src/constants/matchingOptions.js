@@ -29,3 +29,18 @@ export const UB_MAJORS = [
   "B.Sc. (Information Systems)",
   "B.Sc. (Information Technology)",
 ];
+
+export const SUGGESTED_INDUSTRIES = [
+  "Banking & Finance",
+  "Fintech",
+  "Mining & Resources",
+  "Telecommunications",
+  "Government & Public Sector",
+  "Healthcare & HealthTech",
+  "Retail & E-commerce",
+  "Education & EdTech",
+  "Agriculture & AgTech",
+  "Energy & Utilities",
+  "Transportation & Logistics",
+  "Tourism & Hospitality"
+];
