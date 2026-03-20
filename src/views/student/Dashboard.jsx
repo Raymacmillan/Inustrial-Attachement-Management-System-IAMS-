@@ -63,7 +63,7 @@ export default function StudentDashboard() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-10 space-y-8 md:space-y-10 pb-32 animate-in fade-in duration-700">
       
       {/* ── Welcome Hero ── */}
-      <section className="relative overflow-hidden bg-brand-900 rounded-[1rem] p-8 md:p-12 text-white shadow-xl border border-white/5">
+      <section className="relative overflow-hidden bg-brand-900 rounded-[1.5rem] md:rounded-[2rem] p-8 md:p-12 text-white shadow-xl border border-white/5">
         <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8 text-center md:text-left">
           <div className="space-y-4 max-w-2xl">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/20 text-brand-200 text-[9px] md:text-[10px] font-bold uppercase tracking-widest">
@@ -75,7 +75,7 @@ export default function StudentDashboard() {
                 Dumelang, {student?.full_name?.split(" ")[0] || "Ray"}
               </h1>
               <p className="text-brand-100/80 font-medium text-sm md:text-lg max-w-md leading-relaxed">
-                Ready to start your attachment? Track your matching status and log your 14-week journey here.
+                Ready to start your attachment? Track your matching status and log your 8-week journey here.
               </p>
             </div>
           </div>
@@ -92,18 +92,18 @@ export default function StudentDashboard() {
         <div className="absolute -bottom-24 -right-24 w-96 h-96 bg-brand-500/10 rounded-full blur-[120px]" />
       </section>
 
-      {/* ── Quick Stats ── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+      {/* ── Quick Stats: Changed to xl:grid-cols-3 to prevent iPad squashing ── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-6">
         <StatCard title="Placement Status" value={student?.attachment_status || "Pending"} icon={Briefcase} colorClass="border-brand-600" />
-        <StatCard title="Logbook Status" value="Week 0 / 14" icon={ClipboardList} colorClass="border-brand-200" />
+        <StatCard title="Logbook Status" value="Week 0 / 8" icon={ClipboardList} colorClass="border-brand-200" />
         <StatCard title="Matching Tier" value={student?.gpa >= 3.5 ? "Priority" : "Standard"} icon={LayoutDashboard} colorClass="border-brand-400" />
       </div>
 
-      {/* ── Action Center: LG:Grid-Cols-3 for better space management ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
+      {/* ── Action Center: xl:grid-cols-3 gives Profile & Resources more space ── */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 md:gap-8">
         
-        {/* Profile Strength & Skills Cloud (Spans 2 columns) */}
-        <div className="lg:col-span-2 card p-6 md:p-8 bg-white border border-gray-100 rounded-[1.5rem] md:rounded-[2.5rem] shadow-sm space-y-8">
+        {/* Profile Strength & Skills Cloud (Spans 2 columns on large screens) */}
+        <div className="xl:col-span-2 card p-6 md:p-8 bg-white border border-gray-100 rounded-[1.5rem] md:rounded-[2.5rem] shadow-sm space-y-8">
           <div className="space-y-6">
             <div className="flex justify-between items-center">
               <h3 className="text-lg font-display font-bold text-brand-900">Profile Readiness</h3>
@@ -161,11 +161,11 @@ export default function StudentDashboard() {
           </div>
 
           <div className="space-y-2 md:space-y-3">
-            <button className="w-full flex items-center justify-between p-4 bg-white rounded-xl border border-gray-100 hover:border-brand-200 transition-all group cursor-pointer">
+            <button className="w-full flex items-center justify-between p-4 bg-white rounded-xl border border-gray-100 hover:border-brand-200 transition-all group cursor-pointer text-left">
               <span className="text-[11px] md:text-xs font-bold text-gray-700">Attachment Handbook</span>
               <ExternalLink size={14} className="text-gray-400 group-hover:text-brand-600" />
             </button>
-            <button className="w-full flex items-center justify-between p-4 bg-white rounded-xl border border-gray-100 hover:border-brand-200 transition-all group cursor-pointer">
+            <button className="w-full flex items-center justify-between p-4 bg-white rounded-xl border border-gray-100 hover:border-brand-200 transition-all group cursor-pointer text-left">
               <span className="text-[11px] md:text-xs font-bold text-gray-700">Logbook Template (PDF)</span>
               <ExternalLink size={14} className="text-gray-400 group-hover:text-brand-600" />
             </button>
