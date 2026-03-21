@@ -62,3 +62,17 @@ ADD COLUMN IF NOT EXISTS industry TEXT;
 
 -- Create an index to speed up matching queries
 CREATE INDEX IF NOT EXISTS idx_org_industry ON organization_profiles(industry);
+
+-- 1. Add avatar support to organization_profiles
+ALTER TABLE organization_profiles 
+ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+
+-- 2. Ensure Storage Bucket exists for Organization Assets
+INSERT INTO storage.buckets (id, name, public) 
+VALUES ('avatars', 'avatars', true)
+ON CONFLICT (id) DO NOTHING;
+
+-- 3. RLS for Organization Avatars
+CREATE POLICY "Organizations can upload their own avatar" 
+ON storage.objects FOR INSERT 
+WITH CHECK (bucket_id = 'avatars' AND auth.uid()::text = (storage.foldername(name))[1]);
