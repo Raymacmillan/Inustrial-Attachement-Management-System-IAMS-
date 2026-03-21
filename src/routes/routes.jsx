@@ -29,7 +29,8 @@ import DashboardLayout from "../components/layout/DashboardLayout";
 // import SupervisorAssessment from "../views/organization/Assessment"; // Release 2.0
 
 // Coordinator Views (Release 1.0)
-import MatchingEngine from "../views/coordinator/Matching";
+import CoordinatorDashboard from "../views/admin/CoordinatorDashboard"; 
+import MatchingEngine from "../views/admin/MatchEngine";
 
 export const router = createBrowserRouter([
   {
@@ -67,7 +68,6 @@ export const router = createBrowserRouter([
       // ── Organization Routes (Release 1.0) ──
       {
         path: "org",
-        path: "org",
         element: (
           <ProtectedRoute allowedRoles={["org"]}>
             <DashboardLayout>
@@ -87,12 +87,15 @@ export const router = createBrowserRouter([
         path: "coordinator",
         element: (
           <ProtectedRoute allowedRoles={["coordinator"]}>
-            <Outlet />
+            {/* Using DashboardLayout for consistency across all portals */}
+            <DashboardLayout><Outlet /></DashboardLayout>
           </ProtectedRoute>
         ),
-        children: [{ path: "matching", element: <MatchingEngine /> }],
+        children: [
+          { path: "dashboard", element: <CoordinatorDashboard /> }, 
+          { path: "matching", element: <MatchingEngine /> },
+        ],
       },
-
       { path: "*", element: <NotFound /> },
     ],
   },
