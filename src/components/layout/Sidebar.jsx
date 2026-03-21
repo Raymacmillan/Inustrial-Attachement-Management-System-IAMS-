@@ -1,37 +1,14 @@
 import { Link, useLocation } from "react-router-dom";
 import { UserAuth } from "../../context/AuthContext";
-import {
-  LayoutDashboard,
-  ClipboardList,
-  UserCheck,
-  Settings,
-  LogOut,
-  X,
-  Briefcase,
-  User,
-  CheckCircle
-} from "lucide-react";
+import { NAV_LINKS } from "../../constants/navigation";
+import { Settings, LogOut, X } from "lucide-react";
 
 export default function Sidebar({ isOpen, setIsOpen }) {
   const { userRole, signOut } = UserAuth();
   const location = useLocation();
 
-  const studentLinks = [
-  { name: "My Dashboard", path: "/student/dashboard", icon: <LayoutDashboard size={20} /> },
-  { name: "Find Attachment", path: "/student/browse", icon: <Briefcase size={20} /> },
-  { name: "Career Preferences", path: "/student/preferences", icon: <Briefcase size={20} /> },
-  { name: "My Applications", path: "/student/applications", icon: <CheckCircle size={20} /> },
-  { name: "Weekly Logbook", path: "/student/logbook", icon: <ClipboardList size={20} /> }, 
-  { name: "My Profile", path: "/student/profile", icon: <User size={20} /> },
-];
-
-  const orgLinks = [
-    { name: "Employer Portal", path: "/org/portal", icon: <LayoutDashboard size={20} /> },
-    { name: "Requirements", path: "/org/requirements", icon: <ClipboardList size={20} /> },
-    { name: "Student Matches", path: "/org/applications", icon: <UserCheck size={20} /> },
-  ];
-
-  const links = userRole === "org" ? orgLinks : studentLinks;
+  
+  const links = NAV_LINKS[userRole] || NAV_LINKS.student;
 
   return (
     <>
@@ -43,20 +20,25 @@ export default function Sidebar({ isOpen, setIsOpen }) {
         />
       )}
 
-      {/* Sidebar: h-screen ensures it takes full height */}
       <aside
         className={`
-        fixed inset-y-0 left-0 z-[70] w-72 bg-brand-900 text-white transform transition-transform duration-300 ease-in-out shadow-2xl
-        lg:relative lg:translate-x-0 lg:z-0 lg:shadow-none h-screen shrink-0 flex flex-col
-        ${isOpen ? "translate-x-0" : "-translate-x-full"}
-      `}
+          fixed inset-y-0 left-0 z-[70] w-72 bg-brand-900 text-white transform transition-transform duration-300 ease-in-out shadow-2xl
+          lg:relative lg:translate-x-0 lg:z-0 lg:shadow-none h-screen shrink-0 flex flex-col
+          ${isOpen ? "translate-x-0" : "-translate-x-full"}
+        `}
       >
         <div className="h-full flex flex-col p-6 overflow-hidden">
           {/* Logo Section */}
           <div className="flex items-center justify-between mb-10 shrink-0">
-            <h2 className="font-display text-3xl font-bold tracking-tighter text-white">
-              IAMS
-            </h2>
+            <div className="flex flex-col">
+              <h2 className="font-display text-3xl font-bold tracking-tighter text-white uppercase">
+                IAMS
+              </h2>
+              {/* Visual indicator of current portal */}
+              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-400">
+                {userRole || 'User'} Portal
+              </span>
+            </div>
             <button
               className="lg:hidden p-2 -mr-2 text-brand-200 hover:text-white transition-colors"
               onClick={() => setIsOpen(false)}
@@ -65,7 +47,7 @@ export default function Sidebar({ isOpen, setIsOpen }) {
             </button>
           </div>
 
-          {/* Navigation Section - overflow-y-auto only here if links exceed height */}
+          {/* Navigation Section */}
           <nav className="flex-1 space-y-2 overflow-y-auto custom-scrollbar pr-2">
             {links.map((link) => (
               <Link
