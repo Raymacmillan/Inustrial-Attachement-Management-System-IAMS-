@@ -3,13 +3,27 @@ import { UserAuth } from "../../context/AuthContext";
 import { useNavigate, Link } from "react-router-dom";
 import Input from "../../components/ui/Input";
 import Button from "../../components/ui/Button";
+import SearchableSelect from "../../components/ui/SearchableSelect";
 import PasswordStrengthMeter from "../../components/ui/PasswordStrengthMeter";
-import { Building2, Mail, Lock, ArrowRight, MailCheck, AlertCircle } from "lucide-react";
+
+
+import { SUGGESTED_INDUSTRIES } from "../../constants/matchingOptions";
+
+import { 
+  Building2, 
+  Mail, 
+  Lock, 
+  ArrowRight, 
+  MailCheck, 
+  AlertCircle,
+  Briefcase 
+} from "lucide-react";
 
 export default function RegisterOrg() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [orgName, setOrgName] = useState("");
+  const [industry, setIndustry] = useState(""); 
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [isSent, setIsSent] = useState(false);
@@ -20,10 +34,21 @@ export default function RegisterOrg() {
 
   const handleRegister = async (e) => {
     e.preventDefault();
+    
+    if (!industry) {
+      setError("Please select your organization's primary industry.");
+      return;
+    }
+
     setError("");
     setLoading(true);
 
-    const metadata = { full_name: orgName, role: "org" };
+    const metadata = { 
+      full_name: orgName, 
+      role: "org",
+      industry: industry 
+    };
+
     const { success, error: authError } = await signUpNewUser(email, password, metadata, false);
 
     if (success) {
@@ -54,6 +79,7 @@ export default function RegisterOrg() {
 
   return (
     <div className="flex min-h-screen w-full font-body bg-white overflow-x-hidden">
+      {/* ── Left Side: Brand Visual ── */}
       <div className="hidden lg:flex lg:w-1/2 bg-brand-900 items-center justify-center p-12 relative overflow-hidden">
         <div className="max-w-lg z-10">
           <div className="inline-flex items-center gap-2 px-3 py-1 mb-6 bg-brand-800 text-brand-200 rounded-full text-xs font-bold uppercase tracking-widest border border-brand-700">Employer Portal</div>
@@ -63,6 +89,7 @@ export default function RegisterOrg() {
         <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#3b82f6_1px,transparent_1px)] bg-size-[20px_20px]" />
       </div>
 
+      {/* ── Right Side: Register Form ── */}
       <div className="w-full lg:w-1/2 bg-gray-50 flex flex-col items-center justify-center p-6">
         <div className="w-full max-w-md bg-white p-8 rounded-3xl shadow-xl border border-gray-100">
           <h2 className="font-display text-3xl text-brand-900 mb-2 font-bold tracking-tight text-center lg:text-left">Partner Signup</h2>
@@ -84,6 +111,20 @@ export default function RegisterOrg() {
               required
               placeholder="Company Pty Ltd"
             />
+
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block ml-1">
+                Primary Industry
+              </label>
+              <SearchableSelect 
+                options={SUGGESTED_INDUSTRIES}
+                selected={industry ? [industry] : []}
+                onSelect={(item) => setIndustry(item)}
+                onRemove={() => setIndustry("")}
+                placeholder="Search or select industry..."
+              />
+            </div>
+
             <Input
               label="Business Email"
               type="email"
@@ -93,6 +134,7 @@ export default function RegisterOrg() {
               required
               placeholder="hr@company.co.bw"
             />
+
             <div className="relative space-y-2">
               <Input
                 label="Security Password"

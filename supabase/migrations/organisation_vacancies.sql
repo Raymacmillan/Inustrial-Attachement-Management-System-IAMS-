@@ -50,3 +50,30 @@ CREATE POLICY "Coordinators: View all for auditing"
   ON organization_vacancies
   FOR SELECT
   USING (current_user_has_role('coordinator'));
+
+
+--Dropped the problematic policies of infinite recursive loop
+DROP POLICY IF EXISTS "Organizations: Manage own vacancies" ON organization_vacancies;
+DROP POLICY IF EXISTS "Coordinators: View all for auditing" ON organization_vacancies;
+
+-- This checks if the user's ID matches the vacancy's org_id directly
+CREATE POLICY "org_manage_own_vacancies"
+ON organization_vacancies
+FOR ALL
+USING (auth.uid() = org_id)
+WITH CHECK (auth.uid() = org_id);
+
+-- Create a clean policy for Coordinators using JWT Metadata
+-- This avoids querying the user_roles table entirely during the check
+CREATE POLICY "coordinators_audit_vacancies"
+ON organization_vacancies
+FOR SELECT
+USING (
+  (auth.jwt() -> 'user_metadata' ->> 'role') = 'coordinator'
+);
+
+-- Ensure RLS is active
+ALTER TABLE organization_vacancies ENABLE ROW LEVEL SECURITY;
+
+-- Refresh the schema cache
+NOTIFY pgrst, 'reload schema';

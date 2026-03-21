@@ -54,3 +54,11 @@ DROP COLUMN IF EXISTS job_description;
 
 
 COMMENT ON COLUMN organization_profiles.job_description IS 'Detailed vacancy information for the matching engine';
+
+
+-- Add industry to organization_profiles
+ALTER TABLE organization_profiles 
+ADD COLUMN IF NOT EXISTS industry TEXT; 
+
+-- Create an index to speed up matching queries
+CREATE INDEX IF NOT EXISTS idx_org_industry ON organization_profiles(industry);

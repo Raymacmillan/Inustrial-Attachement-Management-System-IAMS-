@@ -87,3 +87,48 @@ CREATE TRIGGER on_student_placed
   AFTER UPDATE ON student_profiles
   FOR EACH ROW
   EXECUTE FUNCTION handle_student_placement();
+
+
+  -- 1. Add the column
+ALTER TABLE organization_vacancies 
+ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now());
+
+-- 2. Create a function to auto-update the timestamp
+CREATE OR REPLACE FUNCTION update_modified_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = now();
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+-- 3. Create the trigger
+CREATE TRIGGER update_vacancies_modtime
+    BEFORE UPDATE ON organization_vacancies
+    FOR EACH ROW
+    EXECUTE PROCEDURE update_modified_column();
+
+
+
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger AS $$
+BEGIN
+  IF (NEW.raw_user_meta_data->>'role' = 'org') THEN
+    INSERT INTO public.organization_profiles (id, org_name, email, industry)
+    VALUES (
+      NEW.id,
+      NEW.raw_user_meta_data->>'full_name',
+      NEW.email,
+      NEW.raw_user_meta_data->>'industry' 
+    );
+  ELSIF (NEW.raw_user_meta_data->>'role' = 'student') THEN
+    INSERT INTO public.student_profiles (id, full_name, email)
+    VALUES (
+      NEW.id,
+      NEW.raw_user_meta_data->>'full_name',
+      NEW.email
+    );
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
