@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
-import { Users, Building2, Zap, Search, Filter, Loader2, AlertCircle } from "lucide-react";
+import { Users, Building2, Zap, Search, Filter, Loader2, AlertCircle, MapPin, GraduationCap } from "lucide-react";
 import { coordinatorService } from "../../services/coordinatorService";
 import StatCard from "../../components/ui/StatCard";
 import Badge from "../../components/ui/Badge";
 import Button from "../../components/ui/Button";
+import StudentAuditModal from "../admin/StudentAuditModal"; // Integrated the existing modal
 import { useNavigate } from "react-router-dom";
 
 export default function CoordinatorDashboard() {
@@ -17,6 +18,10 @@ export default function CoordinatorDashboard() {
   const [loading, setLoading] = useState(true);
   const [alertsVisible, setAlertsVisible] = useState(true); 
 
+  // ── MODAL STATE ──
+  const [selectedStudent, setSelectedStudent] = useState(null);
+  const [isModalOpen, setIsModalOpen]         = useState(false);
+
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -25,7 +30,7 @@ export default function CoordinatorDashboard() {
         setLoading(true);
         const [statsData, registryData] = await Promise.all([
           coordinatorService.getDashboardStats(),
-          coordinatorService.getStudentRegistry()
+          coordinatorService.getStudentRegistryDeep()
         ]);
         
         setStats(statsData);
@@ -40,11 +45,28 @@ export default function CoordinatorDashboard() {
     fetchDashboardData();
   }, []);
 
+  // ── HANDLERS ──
+  const openAudit = (student) => {
+    setSelectedStudent(student);
+    setIsModalOpen(true);
+  };
+
+  const handleStudentUpdate = (studentId, newStatus) => {
+    // Update local students list to reflect changes in the table immediately
+    setStudents(prev => 
+      prev.map(s => s.id === studentId ? { ...s, status: newStatus } : s)
+    );
+    // Keep the selected student in sync if the modal is still open
+    if (selectedStudent?.id === studentId) {
+      setSelectedStudent(prev => ({ ...prev, status: newStatus }));
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-brand-600">
         <Loader2 className="animate-spin mb-4" size={40} />
-        <p className="font-bold animate-pulse">Syncing Command Center...</p>
+        <p className="font-bold animate-pulse uppercase tracking-widest text-[10px]">Syncing Command Center...</p>
       </div>
     );
   }
@@ -79,10 +101,10 @@ export default function CoordinatorDashboard() {
         {/* ── STUDENT REGISTRY TABLE ── */}
         <div className="xl:col-span-2 card bg-white border border-gray-100 shadow-sm overflow-hidden rounded-3xl transition-all hover:shadow-md">
           <div className="p-6 border-b border-gray-50 flex items-center justify-between">
-            <h3 className="font-display text-xl text-brand-900 font-bold">Student Registry</h3>
+            <h3 className="font-display text-xl text-brand-900 font-bold">Quick Registry</h3>
             <div className="flex gap-2">
-               <Button variant="ghost" size="sm" className="text-gray-400 hover:text-brand-600 transition-colors">
-                  <Filter size={16} />
+               <Button variant="ghost" size="sm" onClick={() => navigate('/coordinator/students')} className="text-brand-600 font-bold">
+                  View Full Registry
                </Button>
             </div>
           </div>
@@ -90,27 +112,33 @@ export default function CoordinatorDashboard() {
             <table className="w-full text-left border-collapse">
               <thead className="bg-gray-50 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
                 <tr>
-                  <th className="px-6 py-4">Student Name</th>
-                  <th className="px-6 py-4">Primary Skills</th>
+                  <th className="px-6 py-4">Student & GPA</th>
+                  <th className="px-6 py-4">Technical Skills</th>
                   <th className="px-6 py-4">Status</th>
                   <th className="px-6 py-4 text-right">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {students.map((student) => {
-                  const prefs = student.student_preferences?.[0] || {};
+                {students.slice(0, 10).map((student) => {
+                  const prefs = student.student_preferences || {};
                   return (
                     <tr key={student.id} className="hover:bg-brand-50/30 transition-colors group cursor-default">
                       <td className="px-6 py-4">
                         <div className="flex flex-col">
-                           <span className="text-sm font-bold text-brand-900">{student.full_name}</span>
-                           <span className="text-[10px] text-gray-400 font-mono tracking-tighter">{student.student_id}</span>
+                           <span className="text-sm font-bold text-brand-900 leading-tight">{student.full_name}</span>
+                           <div className="flex items-center gap-2 mt-0.5">
+                              <span className="text-[10px] text-gray-400 font-mono tracking-tighter">{student.student_id}</span>
+                              <span className="text-[10px] font-black text-brand-600 bg-brand-50 px-1 rounded flex items-center gap-0.5">
+                                 <GraduationCap size={10} /> {student.gpa || 'N/A'}
+                              </span>
+                           </div>
                         </div>
                       </td>
+
                       <td className="px-6 py-4">
-                        <div className="flex flex-wrap gap-1">
+                        <div className="flex flex-wrap gap-1 max-w-[200px]">
                           {prefs.technical_skills?.slice(0, 2).map((skill, i) => (
-                            <span key={i} className="text-[9px] bg-brand-50 text-brand-700 px-1.5 py-0.5 rounded border border-brand-100 uppercase font-bold tracking-tight">
+                            <span key={i} className="text-[9px] bg-white text-brand-700 px-1.5 py-0.5 rounded border border-gray-100 uppercase font-bold tracking-tight">
                               {skill}
                             </span>
                           ))}
@@ -119,14 +147,19 @@ export default function CoordinatorDashboard() {
                           )}
                         </div>
                       </td>
+
                       <td className="px-6 py-4">
-                        <Badge variant={prefs.is_searching ? "warning" : "success"}>
-                          {prefs.is_searching ? "Searching" : "Placed"}
+                        <Badge variant={student.status === 'allocated' || student.status === 'matched' ? "success" : "warning"}>
+                          {student.status}
                         </Badge>
                       </td>
+
                       <td className="px-6 py-4 text-right">
-                        <button className="text-brand-600 font-black text-[10px] uppercase tracking-wider hover:underline opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
-                          View Match
+                        <button 
+                          onClick={() => openAudit(student)}
+                          className="text-brand-600 font-black text-[10px] uppercase tracking-wider hover:underline opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                        >
+                          Audit Profile
                         </button>
                       </td>
                     </tr>
@@ -182,6 +215,14 @@ export default function CoordinatorDashboard() {
           )}
         </div>
       </div>
+
+      {/* ── AUDIT MODAL ── */}
+      <StudentAuditModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        student={selectedStudent}
+        onUpdate={handleStudentUpdate}
+      />
     </div>
   );
 }

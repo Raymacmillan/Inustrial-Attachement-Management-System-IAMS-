@@ -99,6 +99,7 @@ export const AuthContextProvider = ({ children }) => {
   useEffect(() => {
     const initializeAuth = async () => {
       const { data: { session } } = await supabase.auth.getSession();
+    
       setSession(session);
       if (session?.user) {
         setUserRole(session.user.user_metadata.role);

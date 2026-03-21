@@ -70,11 +70,10 @@ BEFORE INSERT OR UPDATE ON logbook_weeks
 FOR EACH ROW EXECUTE FUNCTION validate_logbook_week_limit();
 
 
--- Automatically stop searching when a student is placed
 CREATE OR REPLACE FUNCTION handle_student_placement() 
 RETURNS TRIGGER AS $$
 BEGIN
-  IF NEW.status = 'placed' THEN
+  IF NEW.status = 'allocated' THEN  
     UPDATE student_preferences 
     SET is_searching = false 
     WHERE student_id = NEW.id;
