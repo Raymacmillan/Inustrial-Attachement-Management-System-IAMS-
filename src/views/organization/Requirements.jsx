@@ -6,12 +6,12 @@ import Button from "../../components/ui/Button";
 import Input from "../../components/ui/Input";
 import Pill from "../../components/ui/Pill";
 import SearchableSelect from "../../components/ui/SearchableSelect";
+import ConfirmModal from "../../components/ui/ConfirmModal";
 
-// Standardized constants for the Matching Engine
-import { 
-  SUGGESTED_ROLES, 
-  SUGGESTED_SKILLS, 
-  BOTSWANA_LOCATIONS 
+import {
+  SUGGESTED_ROLES,
+  SUGGESTED_SKILLS,
+  BOTSWANA_LOCATIONS,
 } from "../../constants/matchingOptions";
 
 import {
@@ -21,9 +21,12 @@ import {
   Users,
   Target,
   ArrowLeft,
-  FileCheck,
-  AlertCircle,
+  Plus,
+  Trash2,
+  Edit3,
+  Loader2,
   CheckCircle,
+  AlertCircle,
 } from "lucide-react";
 
 export default function Requirements() {
@@ -31,300 +34,385 @@ export default function Requirements() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [orgName, setOrgName] = useState(""); 
-  const [message, setMessage] = useState({ type: "", text: "" });
-
-  const [formData, setFormData] = useState({
+  const [profile, setProfile] = useState({
     location: "",
     requires_cv: true,
     requires_transcript: true,
-    role_title: "",
-    available_slots: 1,
-    work_mode: "On-site",
-    required_skills: [],
-    job_description: "",
-    min_gpa_required: 2.0,
   });
+  const [vacancies, setVacancies] = useState([]);
+  const [message, setMessage] = useState({ type: "", text: "" });
+
+  // ── MODAL STATES ──
+  const [activeVacancy, setActiveVacancy] = useState(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [vacancyToDelete, setVacancyToDelete] = useState(null);
 
   useEffect(() => {
-    if (!message.text) return;
-    const timer = setTimeout(() => setMessage({ type: "", text: "" }), 4000);
-    return () => clearTimeout(timer);
-  }, [message]);
-
-  useEffect(() => {
-    const fetchAllData = async () => {
+    const fetchData = async () => {
       try {
         if (!user?.id) return;
-        const [profile, vacancies] = await Promise.all([
+        const [profData, vacData] = await Promise.all([
           orgService.getOrgProfile(user.id),
           orgService.getOrgVacancies(user.id),
         ]);
-
-        // Capture Org Name for the UI Header
-        setOrgName(profile?.org_name || "New Organization");
-
-        const latestVacancy = vacancies[0] || {};
-        setFormData({
-          location: profile?.location || "",
-          requires_cv: profile?.requires_cv ?? true,
-          requires_transcript: profile?.requires_transcript ?? true,
-          role_title: latestVacancy.role_title || "",
-          available_slots: latestVacancy.available_slots ?? 1,
-          work_mode: latestVacancy.work_mode || "On-site",
-          required_skills: latestVacancy.required_skills || [],
-          job_description: latestVacancy.job_description || "",
-          min_gpa_required: latestVacancy.min_gpa_required || 2.0,
-          id: latestVacancy.id,
-        });
+        setProfile(profData);
+        setVacancies(vacData || []);
       } catch (err) {
-        console.error("Fetch error:", err);
+        console.error("Fetch Error:", err);
       } finally {
         setLoading(false);
       }
     };
-    fetchAllData();
+    fetchData();
   }, [user?.id]);
 
-  /**
-   * BUG FIX: Handle number inputs specifically to allow empty strings during typing.
-   * This prevents the "cannot erase 1" issue.
-   */
-  const handleNumberChange = (value, field) => {
-    if (value === "") {
-      setFormData(prev => ({ ...prev, [field]: "" })); 
-    } else {
-      const parsed = field === 'min_gpa_required' ? parseFloat(value) : parseInt(value);
-      setFormData(prev => ({ ...prev, [field]: parsed }));
-    }
+  // ── HANDLERS ──
+  const startNewVacancy = () => {
+    setActiveVacancy({
+      role_title: "",
+      available_slots: 1,
+      work_mode: "On-site",
+      required_skills: [],
+      job_description: "",
+      min_gpa_required: 2.0,
+    });
+    // Scroll to form on mobile
+    setTimeout(
+      () =>
+        window.scrollTo({
+          top: document.body.scrollHeight,
+          behavior: "smooth",
+        }),
+      100,
+    );
   };
 
-  const handleSelect = (item, field) => {
-    if (field === 'role_title') {
-      setFormData(prev => ({ ...prev, role_title: item }));
-    } else if (field === 'required_skills') {
-      if (!formData.required_skills.includes(item)) {
-        setFormData(prev => ({ ...prev, required_skills: [...prev.required_skills, item] }));
-      }
-    }
-  };
-
-  const handleRemoveSkill = (skillToRemove) => {
-    setFormData(prev => ({
-      ...prev,
-      required_skills: prev.required_skills.filter(s => s !== skillToRemove)
-    }));
-  };
-
-  const handleSubmit = async (e) => {
+  const handleSaveVacancy = async (e) => {
     e.preventDefault();
-    
-    if (!formData.role_title || !formData.location) {
-      setMessage({ type: "error", text: "Role title and Location are required." });
-      return;
-    }
-
     setSaving(true);
     try {
-      await orgService.updateOrgProfile(user.id, {
-        location: formData.location,
-        requires_cv: formData.requires_cv,
-        requires_transcript: formData.requires_transcript,
+      await orgService.updateOrgProfile(user.id, profile);
+      const savedVac = await orgService.upsertVacancy(user.id, activeVacancy);
+
+      setVacancies((prev) => {
+        const exists = prev.find((v) => v.id === savedVac.id);
+        if (exists)
+          return prev.map((v) => (v.id === savedVac.id ? savedVac : v));
+        return [savedVac, ...prev];
       });
 
-      const vacancyPayload = {
-        ...formData,
-        available_slots: formData.available_slots === "" ? 1 : parseInt(formData.available_slots),
-        min_gpa_required: formData.min_gpa_required === "" ? 2.0 : parseFloat(formData.min_gpa_required)
-      };
-
-      const updatedVacancy = await orgService.upsertVacancy(user.id, vacancyPayload);
-
-      if (!formData.id) {
-        setFormData(prev => ({ ...prev, id: updatedVacancy.id }));
-      }
-
-      setMessage({ type: "success", text: "Requirements secured!" });
-      setTimeout(() => navigate("/org/portal"), 1500);
+      setActiveVacancy(null);
+      setMessage({ type: "success", text: "Role inventory updated!" });
     } catch (err) {
-      console.error("Submit error:", err);
-      setMessage({ type: "error", text: "Save failed. Check table schema in Supabase." });
+      setMessage({ type: "error", text: "Failed to secure role." });
     } finally {
       setSaving(false);
     }
   };
-  if (loading) return (
-    <div className="flex items-center justify-center min-h-[60vh]">
-      <div className="animate-pulse text-brand-600 font-bold text-lg font-display tracking-tighter">
-        SYNCING REQUIREMENTS...
+
+  const triggerDelete = (vacancy) => {
+    setVacancyToDelete(vacancy);
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    try {
+      await orgService.deleteVacancy(vacancyToDelete.id);
+      setVacancies((prev) => prev.filter((v) => v.id !== vacancyToDelete.id));
+      setMessage({ type: "success", text: "Vacancy removed." });
+      if (activeVacancy?.id === vacancyToDelete.id) setActiveVacancy(null);
+    } catch (err) {
+      setMessage({ type: "error", text: "Delete failed." });
+    }
+  };
+
+  if (loading)
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
+        <Loader2 className="animate-spin text-brand-600" size={40} />
+        <p className="text-brand-600 font-bold text-[10px] uppercase tracking-widest">
+          Loading Inventory...
+        </p>
       </div>
-    </div>
-  );
+    );
 
   return (
-    <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500 pb-24 px-4 md:px-0">
-      
-      {/* ── Toast ── */}
-      {message.text && (
-        <div className="fixed bottom-6 left-4 right-4 sm:left-auto sm:right-6 sm:w-80 z-50 pointer-events-none">
-          <div className={`pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm shadow-xl border animate-in slide-in-from-bottom-4 duration-300 ${
-            message.type === "success" ? "bg-white text-green-700 border-green-200" : "bg-white text-red-700 border-red-200"
-          }`}>
-            {message.type === "success" ? <CheckCircle size={18} className="text-green-500" /> : <AlertCircle size={18} className="text-red-500" />}
-            <span className="flex-1">{message.text}</span>
-          </div>
-        </div>
-      )}
-
-      {/* ── Header ── */}
-      <header className="border-b border-gray-100 pb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="space-y-1">
-          <h1 className="text-2xl md:text-4xl text-brand-900 font-bold tracking-tight font-display leading-tight">
-             {orgName} Requirements
+    <div className="max-w-5xl mx-auto space-y-8 pb-24 px-4 md:px-0 animate-in fade-in duration-500">
+      {/* ── HEADER ── */}
+      <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b pb-6">
+        <div>
+          <h1 className="text-3xl font-display font-bold text-brand-900 leading-tight">
+            Placement <span className="text-brand-600">Inventory</span>
           </h1>
-          <p className="text-gray-500 text-sm md:text-base font-light">Set your role criteria for the intelligent matching engine.</p>
+          <p className="text-gray-500 text-sm">
+            Manage multiple internship roles and requirements.
+          </p>
         </div>
-        <button onClick={() => navigate("/org/portal")} className="flex items-center gap-2 text-xs font-bold text-gray-400 hover:text-brand-600 transition-colors bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-100">
-          <ArrowLeft size={16} /> Back to Portal
+        <button
+          onClick={() => navigate("/org/portal")}
+          className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-brand-600 bg-gray-50 px-3 py-2 rounded-xl border border-gray-100 shadow-sm transition-all cursor-pointer"
+        >
+          <ArrowLeft size={14} /> Back to Portal
         </button>
       </header>
 
-      <form onSubmit={handleSubmit} className="space-y-8">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          
-          {/* Card 1: Role Definition */}
-          <div className="card p-6 md:p-8 bg-white shadow-sm border border-gray-100 space-y-6">
-            <h3 className="text-lg text-brand-900 border-b pb-3 flex items-center gap-2 font-bold font-display">
-              <Briefcase className="text-brand-600" size={20} /> Role Definition
-            </h3>
-            
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">Target Position</label>
-              <SearchableSelect 
-                options={SUGGESTED_ROLES}
-                selected={formData.role_title ? [formData.role_title] : []}
-                onSelect={(item) => handleSelect(item, 'role_title')}
-                onRemove={() => setFormData(prev => ({...prev, role_title: ""}))}
-                placeholder="Select the role you are offering..."
+      {/* ── SECTION 1: GLOBAL IDENTITY ── */}
+      <div className="card p-6 md:p-8 bg-white border border-gray-100 rounded-3xl shadow-sm space-y-6">
+        <h3 className="font-bold flex items-center gap-2 text-brand-900 text-sm uppercase tracking-wider">
+          <MapPin size={18} className="text-brand-600" /> Headquarters &
+          Logistics
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
+          <SearchableSelect
+            options={BOTSWANA_LOCATIONS}
+            selected={profile.location ? [profile.location] : []}
+            onSelect={(loc) => setProfile({ ...profile, location: loc })}
+            placeholder="Search Location..."
+          />
+          <div className="flex flex-wrap gap-6 items-center pt-2">
+            <label className="flex items-center gap-3 text-xs font-black tracking-widest text-gray-600 cursor-pointer group">
+              <input
+                type="checkbox"
+                className="w-4 h-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                checked={profile.requires_cv}
+                onChange={(e) =>
+                  setProfile({ ...profile, requires_cv: e.target.checked })
+                }
               />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">Slots Available</label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
-                    <Users size={16} />
-                  </div>
-                  <input
-                    type="number"
-                    className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-500 outline-none transition-all h-11 font-semibold"
-                    value={formData.available_slots}
-                    onChange={(e) => handleNumberChange(e.target.value, "available_slots")}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">Min GPA Required</label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
-                    <Target size={16} />
-                  </div>
-                  <input
-                    type="number"
-                    step="0.1"
-                    className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-500 outline-none transition-all h-11 font-semibold"
-                    value={formData.min_gpa_required}
-                    onChange={(e) => handleNumberChange(e.target.value, "min_gpa_required")}
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Card 2: Required Expertise */}
-          <div className="card p-6 md:p-8 bg-white shadow-sm border border-gray-100 space-y-6">
-            <h3 className="text-lg text-brand-900 border-b pb-3 flex items-center gap-2 font-bold font-display">
-              <Target className="text-brand-600" size={20} /> Required Expertise
-            </h3>
-            <SearchableSelect 
-              options={SUGGESTED_SKILLS}
-              selected={formData.required_skills}
-              onSelect={(item) => handleSelect(item, 'required_skills')}
-              onRemove={handleRemoveSkill}
-              placeholder="Select technical skills required..."
-            />
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">Work Arrangement</label>
-              <div className="flex gap-2">
-                {['On-site', 'Hybrid', 'Remote'].map((mode) => (
-                  <Pill 
-                    key={mode}
-                    label={mode}
-                    isSelected={formData.work_mode === mode}
-                    onClick={() => setFormData(prev => ({...prev, work_mode: mode}))}
-                  />
-                ))}
-              </div>
-            </div>
+              Require CV
+            </label>
+            <label className="flex items-center gap-3 text-xs font-black  tracking-widest text-gray-600 cursor-pointer group">
+              <input
+                type="checkbox"
+                className="w-4 h-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                checked={profile.requires_transcript}
+                onChange={(e) =>
+                  setProfile({
+                    ...profile,
+                    requires_transcript: e.target.checked,
+                  })
+                }
+              />
+              Require Transcript
+            </label>
           </div>
         </div>
+      </div>
 
-        {/* Card 3: Logistics & Location */}
-        <div className="card p-6 md:p-8 bg-white shadow-sm border border-gray-100 space-y-8">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <div className="space-y-4">
-              <h3 className="text-lg text-brand-900 border-b pb-3 flex items-center gap-2 font-bold font-display">
-                <MapPin className="text-brand-600" size={20} /> Office Location
-              </h3>
-              <div className="flex flex-wrap gap-2">
-                {BOTSWANA_LOCATIONS.map((loc) => (
-                  <Pill 
-                    key={loc}
-                    label={loc}
-                    isSelected={formData.location === loc}
-                    onClick={() => setFormData(prev => ({...prev, location: loc}))}
-                  />
-                ))}
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <h3 className="text-lg text-brand-900 border-b pb-3 flex items-center gap-2 font-bold font-display">
-                <FileCheck className="text-brand-600" size={20} /> Documentation Required
-              </h3>
-              <div className="flex gap-6 pt-2">
-                <label className="flex items-center gap-3 font-bold text-xs text-gray-700 cursor-pointer uppercase tracking-wider">
-                  <input type="checkbox" className="w-4 h-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500" checked={formData.requires_cv} onChange={(e) => setFormData(prev => ({ ...prev, requires_cv: e.target.checked }))} />
-                  Student CV
-                </label>
-                <label className="flex items-center gap-3 font-bold text-xs text-gray-700 cursor-pointer uppercase tracking-wider">
-                  <input type="checkbox" className="w-4 h-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500" checked={formData.requires_transcript} onChange={(e) => setFormData(prev => ({ ...prev, requires_transcript: e.target.checked }))} />
-                  Transcript
-                </label>
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-3 pt-4 border-t border-gray-50">
-            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">Role Description</label>
-            <textarea
-              className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl text-sm min-h-[120px] outline-none focus:ring-2 focus:ring-brand-500 transition-all font-medium"
-              placeholder="Describe daily responsibilities and project expectations..."
-              value={formData.job_description}
-              onChange={(e) => setFormData(prev => ({ ...prev, job_description: e.target.value }))}
-            />
-          </div>
-
-          <div className="flex justify-end">
-            <Button type="submit" loading={saving} size="lg" className="min-w-[280px]">
-              <Save size={18} />
-              <span>Update Attachment Vacancy</span>
+      <div className="space-y-6">
+        <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
+          <h2 className="text-xl font-display font-bold text-brand-900">
+            Active Vacancies ({vacancies.length})
+          </h2>
+          {!activeVacancy && (
+            <Button
+              onClick={startNewVacancy}
+              size="md"
+              className="rounded-full px-5 w-full md:w-auto flex justify-center items-center"
+            >
+              <Plus size={16} className="mr-2" /> Add New Role
             </Button>
-          </div>
+          )}
         </div>
-      </form>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {vacancies.length === 0 ? (
+            <div className="col-span-full p-12 border-2 border-dashed border-gray-100 rounded-3xl flex flex-col items-center justify-center text-center opacity-60">
+              <Briefcase size={40} className="text-gray-300 mb-3" />
+              <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">
+                No roles listed yet
+              </p>
+            </div>
+          ) : (
+            vacancies.map((v) => (
+              <div
+                key={v.id}
+                className="p-5 md:p-6 bg-white border border-gray-100 rounded-2xl flex justify-between items-center group hover:border-brand-200 hover:shadow-md transition-all"
+              >
+                <div className="min-w-0 pr-4">
+                  <p className="font-bold text-brand-900 truncate">
+                    {v.role_title}
+                  </p>
+                  <p className="text-[10px] text-gray-400 font-black uppercase tracking-tighter mt-1">
+                    {v.available_slots} Slots · {v.work_mode} · GPA{" "}
+                    {v.min_gpa_required}+
+                  </p>
+                </div>
+                <div className="flex gap-1 shrink-0">
+                  <button
+                    onClick={() => setActiveVacancy(v)}
+                    className="p-2.5 text-brand-600 hover:bg-brand-50 rounded-xl transition-colors cursor-pointer"
+                  >
+                    <Edit3 size={18} />
+                  </button>
+                  <button
+                    onClick={() => triggerDelete(v)}
+                    className="p-2.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors cursor-pointer"
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* ── SECTION 3: VACANCY EDITOR ── */}
+      {activeVacancy && (
+        <div className="animate-in slide-in-from-bottom-8 duration-500 bg-brand-50/40 p-6 md:p-10 rounded-3xl border-2 border-brand-100 space-y-8">
+          <div className="flex justify-between items-center border-b border-brand-100 pb-4">
+            <h3 className="text-xl font-display font-bold text-brand-900 uppercase tracking-tight">
+              {activeVacancy.id ? "Refine Role" : "New Role Definition"}
+            </h3>
+            <button
+              onClick={() => setActiveVacancy(null)}
+              className="text-gray-400 hover:text-red-500 transition-colors"
+            >
+              <Trash2 size={20} />
+            </button>
+          </div>
+
+          <form
+            onSubmit={handleSaveVacancy}
+            className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8"
+          >
+            <div className="space-y-6">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">
+                  Target Position
+                </label>
+                <SearchableSelect
+                  options={SUGGESTED_ROLES}
+                  selected={
+                    activeVacancy.role_title ? [activeVacancy.role_title] : []
+                  }
+                  onSelect={(val) =>
+                    setActiveVacancy({ ...activeVacancy, role_title: val })
+                  }
+                  placeholder="Select role..."
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <Input
+                  label="Slots"
+                  type="number"
+                  value={activeVacancy.available_slots}
+                  onChange={(e) =>
+                    setActiveVacancy({
+                      ...activeVacancy,
+                      available_slots: e.target.value,
+                    })
+                  }
+                />
+                <Input
+                  label="Min GPA"
+                  type="number"
+                  step="0.1"
+                  value={activeVacancy.min_gpa_required}
+                  onChange={(e) =>
+                    setActiveVacancy({
+                      ...activeVacancy,
+                      min_gpa_required: e.target.value,
+                    })
+                  }
+                />
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">
+                  Required Skills
+                </label>
+                <SearchableSelect
+                  options={SUGGESTED_SKILLS}
+                  selected={activeVacancy.required_skills}
+                  onSelect={(skill) => {
+                    if (!activeVacancy.required_skills.includes(skill))
+                      setActiveVacancy({
+                        ...activeVacancy,
+                        required_skills: [
+                          ...activeVacancy.required_skills,
+                          skill,
+                        ],
+                      });
+                  }}
+                  onRemove={(skill) =>
+                    setActiveVacancy({
+                      ...activeVacancy,
+                      required_skills: activeVacancy.required_skills.filter(
+                        (s) => s !== skill,
+                      ),
+                    })
+                  }
+                  placeholder="Search technical skills..."
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">
+                  Work Mode
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {["On-site", "Hybrid", "Remote"].map((m) => (
+                    <Pill
+                      key={m}
+                      label={m}
+                      isSelected={activeVacancy.work_mode === m}
+                      onClick={() =>
+                        setActiveVacancy({ ...activeVacancy, work_mode: m })
+                      }
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="lg:col-span-2 space-y-3 pt-4 border-t border-brand-100">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">
+                Role Description
+              </label>
+              <textarea
+                className="w-full p-5 rounded-2xl border border-brand-100 bg-white min-h-[140px] text-sm font-medium outline-none focus:ring-2 focus:ring-brand-500 transition-all"
+                placeholder="What will the intern be doing daily? Describe projects and expectations..."
+                value={activeVacancy.job_description}
+                onChange={(e) =>
+                  setActiveVacancy({
+                    ...activeVacancy,
+                    job_description: e.target.value,
+                  })
+                }
+              />
+              <div className="mt-6 flex flex-col sm:flex-row justify-end gap-3">
+                <Button
+                  variant="ghost"
+                  onClick={() => setActiveVacancy(null)}
+                  className="order-2 sm:order-1"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  loading={saving}
+                  className="order-1 sm:order-2 px-10"
+                >
+                  <Save size={16} /> Save Role
+                </Button>
+              </div>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* ── THE CONFIRM MODAL ── */}
+      <ConfirmModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onConfirm={handleConfirmDelete}
+        title="Delete Vacancy?"
+        message={`Are you sure you want to remove the "${vacancyToDelete?.role_title}" position? This will stop matching for this role.`}
+        confirmText="Remove Role"
+      />
     </div>
   );
 }
