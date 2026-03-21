@@ -26,6 +26,7 @@ import LogbookManager from "../features/logbook/LogbookManager";
 import OrgPortal from "../views/organization/Portal";
 import OrgRequirements from "../views/organization/Requirements";
 import DashboardLayout from "../components/layout/DashboardLayout";
+import OrgProfile from "../views/organization/OrgProfile";
 // import SupervisorAssessment from "../views/organization/Assessment"; // Release 2.0
 
 // Coordinator Views (Release 1.0)
@@ -79,6 +80,7 @@ export const router = createBrowserRouter([
         ),
         children: [
           { path: "portal", element: <OrgPortal /> },
+          { path: "profile", element: <OrgProfile /> },
           { path: "requirements", element: <OrgRequirements /> },
           // { path: "assessments", element: <SupervisorAssessment /> },
         ],
