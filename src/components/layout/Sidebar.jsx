@@ -1,13 +1,17 @@
+import { useState } from "react"; // Added useState
 import { Link, useLocation } from "react-router-dom";
 import { UserAuth } from "../../context/AuthContext";
 import { NAV_LINKS } from "../../constants/navigation";
 import { Settings, LogOut, X } from "lucide-react";
+import ConfirmModal from "../ui/ConfirmModal"; // Import the modal
 
 export default function Sidebar({ isOpen, setIsOpen }) {
   const { userRole, signOut } = UserAuth();
   const location = useLocation();
-
   
+  // ── MODAL STATE ──
+  const [isLogoutOpen, setIsLogoutOpen] = useState(false);
+
   const links = NAV_LINKS[userRole] || NAV_LINKS.student;
 
   return (
@@ -34,7 +38,6 @@ export default function Sidebar({ isOpen, setIsOpen }) {
               <h2 className="font-display text-3xl font-bold tracking-tighter text-white uppercase">
                 IAMS
               </h2>
-              {/* Visual indicator of current portal */}
               <span className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-400">
                 {userRole || 'User'} Portal
               </span>
@@ -76,8 +79,9 @@ export default function Sidebar({ isOpen, setIsOpen }) {
               <span>Settings</span>
             </Link>
             
+            {/* LOGOUT TRIGGER */}
             <button
-              onClick={signOut}
+              onClick={() => setIsLogoutOpen(true)}
               className="w-full flex items-center gap-4 px-4 py-3 text-red-400 font-bold hover:bg-red-500/10 rounded-xl transition-all cursor-pointer group"
             >
               <LogOut size={20} className="group-hover:translate-x-1 transition-transform" /> 
@@ -86,6 +90,17 @@ export default function Sidebar({ isOpen, setIsOpen }) {
           </div>
         </div>
       </aside>
+
+      {/* ── THE CONFIRMATION MODAL ── */}
+      <ConfirmModal
+        isOpen={isLogoutOpen}
+        onClose={() => setIsLogoutOpen(false)}
+        onConfirm={signOut}
+        title="End Session?"
+        message="Are you sure you want to log out? Any unsaved changes in your profile or vacancies will be lost."
+        confirmText="Sign Out"
+        type="danger" // Keeps it red to indicate an "Exit" action
+      />
     </>
   );
 }
