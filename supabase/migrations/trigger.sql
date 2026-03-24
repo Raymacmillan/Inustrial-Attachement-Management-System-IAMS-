@@ -131,3 +131,30 @@ BEGIN
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+/* Fix trigger */
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger AS $$
+BEGIN
+  IF (NEW.raw_user_meta_data->>'role' = 'org') THEN
+    INSERT INTO public.organization_profiles (id, org_name, email, industry)
+    VALUES (
+      NEW.id,
+      NEW.raw_user_meta_data->>'full_name',
+      NEW.email,
+      NEW.raw_user_meta_data->>'industry'
+    );
+
+  ELSIF (NEW.raw_user_meta_data->>'role' = 'student') THEN
+    INSERT INTO public.student_profiles (id, full_name, email, student_id)
+    VALUES (
+      NEW.id,
+      NEW.raw_user_meta_data->>'full_name',
+      NEW.email,
+      NEW.raw_user_meta_data->>'student_id'
+    );
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;

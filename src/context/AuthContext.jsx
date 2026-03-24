@@ -59,6 +59,8 @@ export const AuthContextProvider = ({ children }) => {
       },
     });
 
+  
+
     return error ? { success: false, error: error.message } : { success: true, data };
   };
 

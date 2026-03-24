@@ -111,6 +111,7 @@ export default function RegisterOrg() {
               required
               placeholder="Company Pty Ltd"
             />
+            
 
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block ml-1">
