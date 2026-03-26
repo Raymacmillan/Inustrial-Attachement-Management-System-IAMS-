@@ -26,3 +26,8 @@ dist-ssr
 *.sw?
 
 .env.local
+
+supabase/supabase/
+supabase/.temp/
+supabase/.external/
+bin/

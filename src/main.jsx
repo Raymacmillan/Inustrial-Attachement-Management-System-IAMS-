@@ -7,14 +7,16 @@ import { RouterProvider } from "react-router-dom";
 import { AuthContextProvider } from "./context/AuthContext";
 import { AvatarProvider } from "./context/AvatarContext.jsx";
 import { router } from "./routes/routes";
-import App from "./App.jsx";
+import ErrorBoundary from "./components/ui/ErrorBoundary";
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>
-    <AuthContextProvider>
-      <AvatarProvider>
-        <RouterProvider router={router} />
-      </AvatarProvider>
-    </AuthContextProvider>
+    <ErrorBoundary>
+      <AuthContextProvider>
+        <AvatarProvider>
+          <RouterProvider router={router} />
+        </AvatarProvider>
+      </AuthContextProvider>
+    </ErrorBoundary>
   </StrictMode>,
 );

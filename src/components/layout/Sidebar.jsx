@@ -1,9 +1,9 @@
-import { useState } from "react"; // Added useState
+import { useState } from "react"; 
 import { Link, useLocation } from "react-router-dom";
 import { UserAuth } from "../../context/AuthContext";
 import { NAV_LINKS } from "../../constants/navigation";
 import { Settings, LogOut, X } from "lucide-react";
-import ConfirmModal from "../ui/ConfirmModal"; // Import the modal
+import ConfirmModal from "../ui/ConfirmModal"; 
 
 export default function Sidebar({ isOpen, setIsOpen }) {
   const { userRole, signOut } = UserAuth();
@@ -71,13 +71,6 @@ export default function Sidebar({ isOpen, setIsOpen }) {
 
           {/* Bottom Actions Section */}
           <div className="pt-6 mt-6 border-t border-brand-800 shrink-0 space-y-1">
-            <Link
-              to="/settings"
-              className="flex items-center gap-4 px-4 py-3 text-brand-300 font-bold hover:text-white transition-colors rounded-xl hover:bg-brand-800"
-            >
-              <Settings size={20} /> 
-              <span>Settings</span>
-            </Link>
             
             {/* LOGOUT TRIGGER */}
             <button
