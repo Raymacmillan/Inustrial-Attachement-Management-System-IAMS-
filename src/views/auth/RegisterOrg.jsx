@@ -162,6 +162,20 @@ export default function RegisterOrg() {
                 <PasswordStrengthMeter password={password} isFocused={isFocused} />
               </div>
 
+  { password.length > 8 &&(<div className="space-y-2">
+                <Input
+                  label="Confirm Password"
+                  type="password"
+                  icon={<Lock size={18} />}
+                  value={confirmPassword}
+                  onFocus={() => setIsFocused(true)}
+                  onBlur={() => setIsFocused(false)}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                />
+              
+              </div>)}
               <div className="pt-2">
                 <Button type="submit" loading={loading} fullWidth size="lg">
                   <span>Register Organization</span>
