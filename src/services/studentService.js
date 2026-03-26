@@ -30,6 +30,7 @@ export const updateStudentProfile = async (userId, updates) => {
     .single();
 
   if (error) throw error;
+  // single() guarantees data is not null if no error — safe to return directly
   return data;
 };
 
@@ -47,26 +48,17 @@ export const uploadDocument = async (userId, file, bucketName) => {
       upsert: true,
     });
 
-  if (uploadError) {
-    console.error(`Upload Error in ${bucketName}:`, uploadError);
-    throw uploadError;
-  }
+  if (uploadError) throw uploadError;
 
   const { data } = supabase.storage.from(bucketName).getPublicUrl(fileName);
+  if (!data?.publicUrl) throw new Error(`Failed to retrieve public URL for ${bucketName}`);
+
   return data.publicUrl;
 };
 
 /**
  * @description Uploads a profile picture to the 'avatars' bucket.
- *
- * Cache-busting strategy: Supabase Storage returns the same public URL
- * every time because the filename doesn't change (upsert overwrites the file
- * in place). The browser caches the old image against that URL and won't
- * re-fetch it even though the file on the server has changed.
- *
- * Fix: append `?t=<timestamp>` to the public URL before saving it to the DB.
- * Every upload produces a unique URL, forcing the browser to fetch fresh.
- * The `?t=` param is ignored by Supabase Storage — it just prevents caching.
+ * Cache-busting: appends ?t=<timestamp> to force browser re-fetch on update.
  */
 export const uploadAvatar = async (userId, file) => {
   const fileExt = file.name.split(".").pop();
@@ -79,24 +71,19 @@ export const uploadAvatar = async (userId, file) => {
       upsert: true,
     });
 
-  if (uploadError) {
-    console.error("Supabase Storage Error:", uploadError);
-    throw uploadError;
-  }
+  if (uploadError) throw uploadError;
 
   const { data } = supabase.storage.from("avatars").getPublicUrl(fileName);
+  if (!data?.publicUrl) throw new Error("Failed to retrieve avatar public URL");
 
-  const cacheBustedUrl = `${data.publicUrl}?t=${Date.now()}`;
-
-  return cacheBustedUrl;
+  return `${data.publicUrl}?t=${Date.now()}`;
 };
 
 /**
  * @description Removes a document from storage and clears the DB link
  */
 export const deleteDocument = async (userId, bucketName) => {
-  const fileExt = "pdf"; 
-  const fileName = `${userId}-${bucketName}.${fileExt}`;
+  const fileName = `${userId}-${bucketName}.pdf`;
 
   const { error: storageError } = await supabase.storage
     .from(bucketName)
@@ -111,47 +98,45 @@ export const deleteDocument = async (userId, bucketName) => {
     .eq("id", userId);
 
   if (dbError) throw dbError;
-  
+
   return true;
 };
 
 /**
- * @description Fetches the student's internship preferences (Skills, Roles, etc.)
+ * @description Fetches the student's internship preferences
  */
 export const getStudentPreferences = async (studentId) => {
   const { data, error } = await supabase
-    .from('student_preferences')
-    .select('*')
-    .eq('student_id', studentId)
+    .from("student_preferences")
+    .select("*")
+    .eq("student_id", studentId)
     .single();
 
-  if (error && error.code !== 'PGRST116') throw error;
+  // PGRST116 = no rows found — not an error, student just hasn't set prefs yet
+  if (error && error.code !== "PGRST116") throw error;
   return data;
 };
 
 /**
- * @description Updates or Creates student internship intent.
+ * @description Upserts student internship intent (creates or updates)
  */
 export const updateStudentPreferences = async (studentId, preferences) => {
   const cleanData = {
     student_id: studentId,
     preferred_roles: preferences.preferred_roles || [],
-    technical_skills: preferences.technical_skills || [], 
+    technical_skills: preferences.technical_skills || [],
     preferred_locations: preferences.preferred_locations || [],
-    industries: preferences.industries || [], 
-    min_stipend_expected: preferences.min_stipend_expected || 0, 
-    updated_at: new Date().toISOString()
+    industries: preferences.industries || [],
+    min_stipend_expected: preferences.min_stipend_expected || 0,
+    updated_at: new Date().toISOString(),
   };
 
   const { data, error } = await supabase
-    .from('student_preferences')
-    .upsert(cleanData, { onConflict: 'student_id' }) 
+    .from("student_preferences")
+    .upsert(cleanData, { onConflict: "student_id" })
     .select()
     .single();
 
-  if (error) {
-    console.error("Supabase Error Detail:", error.message, error.details);
-    throw error;
-  }
+  if (error) throw error;
   return data;
 };

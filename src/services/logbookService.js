@@ -2,18 +2,19 @@ import { supabase } from "../lib/supabaseClient";
 
 /**
  * LOGBOOK SERVICE (IAMS)
- * Handles the logic for the UB industrial attachment logbook.
- * Dynamic: Supports the standard 8 weeks but allows Admin extensions.
+ * All methods are on a named export object so both
+ * LogbookManager and LogbookModal can import as:
+ *   import { logbookService } from '../../services/logbookService';
  */
 export const logbookService = {
-  
+
   /**
-   * 1. Fetch the student's active placement
-   * Now includes 'duration_weeks' for dynamic UI rendering.
+   * 1. Fetch the student's active placement.
+   * Returns null if no placement exists — not a crash.
    */
   getActivePlacement: async (studentId) => {
     const { data, error } = await supabase
-      .from('placements')
+      .from("placements")
       .select(`
         id,
         organization_id,
@@ -23,74 +24,76 @@ export const logbookService = {
         duration_weeks,
         organization_profiles (org_name)
       `)
-      .eq('student_id', studentId)
-      .eq('status', 'active')
+      .eq("student_id", studentId)
+      .eq("status", "active")
       .single();
 
     if (error) {
-      console.error("Placement error:", error);
-      throw new Error("No active placement found. Contact your coordinator.");
+      // PGRST116 = 0 rows — student simply not placed yet
+      if (error.code === "PGRST116") return null;
+      throw error;
     }
     return data;
   },
 
   /**
-   * 2. Initialize a New Week
-   * Dynamically validates against the placement's allowed duration.
+   * 2. Initialize a new week with Mon–Fri daily log placeholders.
    */
   initializeWeek: async (studentId, placementId, weekNumber, startDate) => {
     const { data: placement, error: pError } = await supabase
-      .from('placements')
-      .select('duration_weeks')
-      .eq('id', placementId)
+      .from("placements")
+      .select("duration_weeks")
+      .eq("id", placementId)
       .single();
 
-    if (pError || !placement) throw new Error("Could not verify placement duration.");
+    if (pError) throw pError;
+    if (!placement) throw new Error("Placement not found.");
 
-    // B. Validation: Dynamic limit
     if (weekNumber < 1 || weekNumber > placement.duration_weeks) {
-      throw new Error(`Invalid week number. Your placement is set for ${placement.duration_weeks} weeks.`);
+      throw new Error(
+        `Invalid week number. Your placement is set for ${placement.duration_weeks} weeks.`
+      );
     }
 
-    // C. Calculate dates (Monday to Friday)
     const start = new Date(startDate);
     const end = new Date(startDate);
-    end.setDate(start.getDate() + 4); 
+    end.setDate(start.getDate() + 4);
 
     const { data: week, error: weekError } = await supabase
-      .from('logbook_weeks')
+      .from("logbook_weeks")
       .insert([{
         student_id: studentId,
         placement_id: placementId,
         week_number: weekNumber,
-        start_date: start.toISOString().split('T')[0],
-        end_date: end.toISOString().split('T')[0],
-        status: 'draft'
+        start_date: start.toISOString().split("T")[0],
+        end_date: end.toISOString().split("T")[0],
+        status: "draft",
       }])
       .select()
       .single();
 
     if (weekError) {
-       if (weekError.code === '23505') throw new Error(`Week ${weekNumber} has already been initialized.`);
-       throw weekError;
+      if (weekError.code === "23505") {
+        throw new Error(`Week ${weekNumber} has already been initialized.`);
+      }
+      throw weekError;
     }
 
-    // Generate Daily Log Placeholders (Mon-Fri)
-    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+    const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
     const dailyEntries = days.map((day, index) => {
       const logDate = new Date(start);
       logDate.setDate(start.getDate() + index);
       return {
         week_id: week.id,
-        log_date: logDate.toISOString().split('T')[0],
+        log_date: logDate.toISOString().split("T")[0],
         day_of_week: day,
-        activity_details: '',
-        hours_worked: 8.0
+        activity_details: "",
+        hours_worked: 8.0,
       };
     });
 
     const { error: dailyError } = await supabase
-      .from('daily_logs')
+      .from("daily_logs")
       .insert(dailyEntries);
 
     if (dailyError) throw dailyError;
@@ -99,55 +102,53 @@ export const logbookService = {
   },
 
   /**
-   * 3. Fetch Full Week Data
+   * 3. Fetch full week data including daily logs sorted chronologically.
    */
   getWeekDetails: async (weekId) => {
     const { data, error } = await supabase
-      .from('logbook_weeks')
-      .select(`
-        *,
-        daily_logs (*)
-      `)
-      .eq('id', weekId)
+      .from("logbook_weeks")
+      .select(`*, daily_logs (*)`)
+      .eq("id", weekId)
       .single();
 
     if (error) throw error;
-    
-    // Ensure chronological order
-    data.daily_logs.sort((a, b) => new Date(a.log_date) - new Date(b.log_date));
+
+    data.daily_logs.sort(
+      (a, b) => new Date(a.log_date) - new Date(b.log_date)
+    );
     return data;
   },
 
   /**
-   * 4. Update Daily Entry
+   * 4. Update a single daily log entry (auto-save on change).
    */
   updateDailyLog: async (logId, updates) => {
-    const { data, error } = await supabase
-      .from('daily_logs')
-      .update({ 
+    const { error } = await supabase
+      .from("daily_logs")
+      .update({
         activity_details: updates.activity_details,
         hours_worked: updates.hours_worked,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       })
-      .eq('id', logId);
+      .eq("id", logId);
 
     if (error) throw error;
-    return data;
+    return true;
   },
 
   /**
-   * 5. Submit Week for Approval
+   * 5. Submit a week for supervisor approval.
    */
   submitWeek: async (weekId) => {
-    const { data, error } = await supabase
-      .from('logbook_weeks')
-      .update({ 
-        status: 'submitted',
-        updated_at: new Date().toISOString()
+    const { error } = await supabase
+      .from("logbook_weeks")
+      .update({
+        status: "submitted",
+        updated_at: new Date().toISOString(),
       })
-      .eq('id', weekId);
+      .eq("id", weekId);
 
     if (error) throw error;
-    return data;
-  }
+    return true;
+  },
 };
