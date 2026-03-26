@@ -15,6 +15,7 @@ export default function RegisterStudent() {
   const [loading, setLoading] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
   const [isPendingVerification, setIsPendingVerification] = useState(false);
+  const [confirmPassword, setConfirmPassword] = useState("");
 
   const { signUpNewUser } = UserAuth();
   const navigate = useNavigate();
@@ -34,6 +35,11 @@ export default function RegisterStudent() {
       setLoading(false);
       setError(authError);
     }
+     if (password !== confirmPassword ) { 
+                setError("Passwords do not match");
+                  setLoading(false);
+                return;
+            };
   };
 
   // ── Email verification pending state ──
@@ -71,11 +77,64 @@ export default function RegisterStudent() {
             <div className="inline-flex items-center gap-2 px-3 py-1 mb-6 bg-brand-800 text-brand-200 rounded-full text-xs font-bold uppercase tracking-widest border border-brand-700">
               <GraduationCap size={14} /> Student Portal
             </div>
+<<<<<<< Updated upstream
             <h1 className="font-display text-6xl text-white mb-6 leading-tight tracking-tighter">
               IAMS <span className="text-brand-500">Network</span>
             </h1>
             <p className="text-brand-300 text-xl font-light leading-relaxed">
               Digitizing the future of work for Botswana's next generation of tech leaders.
+=======
+
+            <Input
+              label="UB Email Address"
+              type="email"
+              icon={<Mail size={18} />}
+              placeholder="id@ub.ac.bw"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+
+            <div className="relative space-y-2">
+              <Input
+                label="Security Password"
+                type="password"
+                icon={<Lock size={18} />}
+                value={password}
+                onFocus={() => setIsFocused(true)}
+                onBlur={() => setIsFocused(false)}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                required
+              />
+              <PasswordStrengthMeter password={password} isFocused={isFocused} />
+            </div>
+
+          {password.length >= 4 && (
+  <div className="relative space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
+    <Input
+      label="Confirm Password"
+      type="password"
+      icon={<Lock size={18} />}
+      value={confirmPassword}
+      onFocus={() => setIsFocused(true)}
+      onBlur={() => setIsFocused(false)}
+      onChange={(e) => setConfirmPassword(e.target.value)}
+      placeholder="••••••••"
+      required
+    />
+  </div>
+)}
+            <div className="pt-4">
+              <Button type="submit" loading={loading} className="w-full py-2.5! text-sm! flex items-center justify-center gap-2 shadow-lg shadow-brand-600/20">
+                <span>Create Student Account</span>
+                <ArrowRight size={16} strokeWidth={3} />
+              </Button>
+            </div>
+
+            <p className="text-center text-sm text-gray-500 font-medium pt-2">
+              Already registered? <Link to="/login" className="text-brand-600 font-bold hover:underline">Sign In</Link>
+>>>>>>> Stashed changes
             </p>
           </div>
           <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#3b82f6_1px,transparent_1px)] bg-size-[20px_20px]" />
