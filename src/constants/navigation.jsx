@@ -24,6 +24,7 @@ export const NAV_LINKS = {
     { name: "Employer Portal", path: "/org/portal", icon: <LayoutDashboard size={ICON_SIZE} /> },
     { name: "Requirements", path: "/org/requirements", icon: <ClipboardList size={ICON_SIZE} /> },
     { name: "Student Matches", path: "/org/applications", icon: <UserCheck size={ICON_SIZE} /> },
+    { name: "Business Profile", path: "/org/profile", icon: <User size={ICON_SIZE} /> },
   ],
   coordinator: [
     { name: "Command Center", path: "/coordinator/dashboard", icon: <ShieldCheck size={ICON_SIZE} /> },

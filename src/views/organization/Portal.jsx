@@ -5,6 +5,7 @@ import { useAvatar } from "../../context/AvatarContext";
 import StatCard from "../../components/ui/StatCard";
 import Button from "../../components/ui/Button";
 import * as orgService from "../../services/orgService";
+import { supabase } from "../../lib/supabaseClient";
 import {
   Users,
   Handshake,
@@ -17,6 +18,7 @@ import {
   AlertCircle,
   MapPin,
   Settings,
+  ArrowRight,
 } from "lucide-react";
 
 export default function OrgPortal() {
@@ -24,6 +26,7 @@ export default function OrgPortal() {
   const { avatarUrl, refreshAvatar } = useAvatar() || {};
   const [profile, setProfile] = useState(null);
   const [vacancies, setVacancies] = useState([]);
+  const [matchCount, setMatchCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
@@ -31,14 +34,22 @@ export default function OrgPortal() {
     const loadOrgData = async () => {
       try {
         if (user?.id) {
-          const { profile: profileData, vacancies: vacanciesData } =
-            await orgService.getOrgDashboardData(user.id);
+          const [dashboardData, matchResult] = await Promise.all([
+            orgService.getOrgDashboardData(user.id),
+            // Count active placements for this org — this is the real matches number
+            supabase
+              .from("placements")
+              .select("id", { count: "exact", head: true })
+              .eq("organization_id", user.id)
+              .eq("status", "active"),
+          ]);
 
-          setProfile(profileData);
-          setVacancies(vacanciesData);
+          setProfile(dashboardData.profile);
+          setVacancies(dashboardData.vacancies);
+          setMatchCount(matchResult.count || 0);
 
-          if (profileData.avatar_url) {
-            refreshAvatar(profileData.avatar_url);
+          if (dashboardData.profile.avatar_url) {
+            refreshAvatar(dashboardData.profile.avatar_url);
           }
         }
       } catch (error) {
@@ -68,19 +79,13 @@ export default function OrgPortal() {
 
   return (
     <div className="w-full max-w-7xl mx-auto space-y-8 md:space-y-10 animate-in fade-in zoom-in-95 duration-500 px-4 pb-10">
+
       {/* ── HEADER ── */}
-      {/* 1. Added items-center for mobile centering, reset to items-start for desktop */}
       <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 border-b border-gray-100 pb-8 items-center lg:items-start">
-        {/* 2. Container for Logo + Title: Center items on mobile, Row on tablet+ */}
         <div className="flex flex-col sm:flex-row items-center gap-4 md:gap-6 min-w-0 text-center sm:text-left">
-          {/* Avatar/Logo */}
           <div className="w-16 h-16 md:w-20 md:h-20 rounded-2xl md:rounded-3xl bg-brand-900 overflow-hidden shadow-xl border-4 border-white shrink-0">
             {avatarUrl ? (
-              <img
-                src={avatarUrl}
-                className="w-full h-full object-cover"
-                alt="Logo"
-              />
+              <img src={avatarUrl} className="w-full h-full object-cover" alt="Logo" />
             ) : (
               <div className="w-full h-full flex items-center justify-center text-white font-bold text-xl md:text-2xl">
                 {profile?.org_name?.charAt(0)}
@@ -88,7 +93,6 @@ export default function OrgPortal() {
             )}
           </div>
 
-          {/* Text Content: Center text on mobile */}
           <div className="min-w-0 flex flex-col items-center sm:items-start">
             <div className="inline-block mb-1 bg-brand-100 text-brand-700 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider">
               Employer Dashboard
@@ -96,8 +100,6 @@ export default function OrgPortal() {
             <h1 className="font-display text-2xl md:text-4xl text-brand-900 leading-tight truncate font-bold">
               {profile?.org_name || "Organization"}
             </h1>
-
-            {/* Meta tags: justify-center for mobile layout */}
             <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-3 gap-y-1 mt-1 text-gray-500 font-medium">
               <p className="flex items-center gap-1.5 text-xs md:text-sm">
                 <MapPin size={14} className="text-brand-400" />
@@ -111,8 +113,6 @@ export default function OrgPortal() {
           </div>
         </div>
 
-        {/* 3. Buttons: Stacked and centered by parent, full width for better mobile tap targets */}
-        {/* 3. Buttons: Added sm:justify-center to fix tablet alignment */}
         <div className="flex flex-col sm:flex-row sm:justify-center lg:justify-end gap-3 w-full lg:w-auto">
           <Button
             variant="secondary"
@@ -135,11 +135,13 @@ export default function OrgPortal() {
         </div>
       </header>
 
+      {/* ── STATS ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
         <StatCard title="Total Slots" value={totalSlots} icon={Users} />
+        {/* Matches now shows the real live count from placements table */}
         <StatCard
           title="Matches"
-          value="0"
+          value={matchCount}
           icon={Handshake}
           colorClass="border-accent"
         />
@@ -156,9 +158,36 @@ export default function OrgPortal() {
           colorClass="border-success"
         />
       </div>
+
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 md:gap-8">
-        {/* Main Content Areas */}
         <div className="xl:col-span-2 space-y-6 md:space-y-8">
+
+          {/* ── Matched Students CTA ── */}
+          {matchCount > 0 && (
+            <div
+              className="card p-6 md:p-8 bg-brand-900 text-white border-0 shadow-xl rounded-3xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 cursor-pointer hover:bg-brand-800 transition-colors"
+              onClick={() => navigate("/org/applications")}
+            >
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <Handshake size={18} className="text-brand-400" />
+                  <p className="text-[10px] font-black uppercase tracking-widest text-brand-400">
+                    Active Interns
+                  </p>
+                </div>
+                <h3 className="font-display text-2xl font-bold text-white">
+                  {matchCount} Student{matchCount !== 1 ? "s" : ""} Matched
+                </h3>
+                <p className="text-sm text-brand-300">
+                  View profiles, access CVs and transcripts for your interns.
+                </p>
+              </div>
+              <Button variant="secondary" size="lg" className="shrink-0">
+                View Matches <ArrowRight size={16} />
+              </Button>
+            </div>
+          )}
+
           <div className="card p-6 md:p-8 bg-white shadow-sm border border-gray-100 flex flex-col rounded-3xl">
             <h2 className="font-display text-xl md:text-2xl text-brand-900 mb-6 flex items-center gap-2 font-bold">
               <Target className="text-brand-600" size={20} /> Required Skills
@@ -187,20 +216,16 @@ export default function OrgPortal() {
               Role: {latestVacancy?.role_title || "Pending"}
             </h2>
             <div className="text-gray-600 leading-relaxed text-sm font-medium border-l-4 border-brand-100 pl-4 py-1 mb-6">
-              {latestVacancy?.job_description ||
-                "Detailed role overview will appear here."}
+              {latestVacancy?.job_description || "Detailed role overview will appear here."}
             </div>
             <div className="pt-6 border-t flex flex-wrap gap-4 md:gap-8">
               <DocBadge label="CV" active={profile?.requires_cv} />
-              <DocBadge
-                label="Transcript"
-                active={profile?.requires_transcript}
-              />
+              <DocBadge label="Transcript" active={profile?.requires_transcript} />
             </div>
           </div>
         </div>
 
-        {/* Support Sidebar: Stacks on mobile, stays sticky on desktop */}
+        {/* ── Support Sidebar ── */}
         <div className="xl:col-span-1">
           <div className="card p-6 md:p-8 bg-brand-900 text-white border-0 shadow-xl flex flex-col rounded-3xl sticky top-24">
             <div className="flex items-center gap-3 mb-4">
@@ -214,15 +239,11 @@ export default function OrgPortal() {
             </p>
             <div className="space-y-3 text-[10px] md:text-xs font-medium pt-4 border-t border-brand-800">
               <div className="flex justify-between items-center">
-                <span className="text-brand-400 uppercase tracking-widest">
-                  Coordinator
-                </span>
+                <span className="text-brand-400 uppercase tracking-widest">Coordinator</span>
                 <span>CS Dept</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-brand-400 uppercase tracking-widest">
-                  Email
-                </span>
+                <span className="text-brand-400 uppercase tracking-widest">Email</span>
                 <span className="text-brand-200">support@ub.ac.bw</span>
               </div>
             </div>
@@ -241,9 +262,7 @@ function DocBadge({ label, active }) {
       ) : (
         <AlertCircle size={14} className="text-gray-300" />
       )}
-      <span
-        className={`text-[10px] font-black uppercase tracking-widest ${active ? "text-green-700" : "text-gray-400"}`}
-      >
+      <span className={`text-[10px] font-black uppercase tracking-widest ${active ? "text-green-700" : "text-gray-400"}`}>
         {label}
       </span>
     </div>

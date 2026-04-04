@@ -12,7 +12,6 @@ export const coordinatorService = {
       supabase.from("placements").select("id", { count: "exact", head: true }).eq("status", "active"),
     ]);
 
-    // Check each query individually so we know exactly which one failed
     if (students.error) throw students.error;
     if (orgs.error) throw orgs.error;
     if (searching.error) throw searching.error;
@@ -49,19 +48,73 @@ export const coordinatorService = {
   },
 
   /**
-   * Updates a student's attachment status
+   * Updates a student's attachment status with full lifecycle handling:
+   *
+   * → pending:   Terminates any active placement (student is unmatched).
+   *              Without this the matching engine blocks re-allocation due
+   *              to UNIQUE(student_id, status='active') constraint.
+   * → matched:   Status only — placement is created by the matching engine.
+   * → allocated: Status only — confirms physical start of attachment.
+   * → completed: Marks active placement as completed, then updates status.
+   *
+   * Uses is_coordinator() security-definer function in RLS (bypasses JWT
+   * caching which caused silent 0-row updates with jwt()-based policies).
    */
   updateStudentStatus: async (studentId, newStatus) => {
     const sanitizedStatus = String(newStatus).toLowerCase().trim();
 
+    // ── Revert to pending: terminate active placement ──
+    if (sanitizedStatus === "pending") {
+      const { data: activePlacement } = await supabase
+        .from("placements")
+        .select("id")
+        .eq("student_id", studentId)
+        .eq("status", "active")
+        .maybeSingle();
+
+      if (activePlacement) {
+        const { error: deleteError } = await supabase
+          .from("placements")
+          .delete()
+          .eq("id", activePlacement.id);
+
+        if (deleteError) {
+          throw new Error(`Could not terminate placement: ${deleteError.message}`);
+        }
+      }
+    }
+
+    // ── Mark completed: update placement status before student status ──
+    if (sanitizedStatus === "completed") {
+      const { error: placementError } = await supabase
+        .from("placements")
+        .update({ status: "completed" })
+        .eq("student_id", studentId)
+        .eq("status", "active");
+
+      // Non-fatal — student may not have a placement (manual status change)
+      if (placementError) {
+        console.warn("Could not mark placement as completed:", placementError.message);
+      }
+    }
+
+    // ── Update student status ──
     const { data, error } = await supabase
       .from("student_profiles")
       .update({ status: sanitizedStatus })
       .eq("id", studentId)
-      .select()
+      .select("id, status")
       .single();
 
     if (error) throw error;
+
+    // Verify the update actually persisted (catches silent RLS failures)
+    if (data.status !== sanitizedStatus) {
+      throw new Error(
+        `Status update was blocked by the database. Expected "${sanitizedStatus}" but got "${data.status}". Check coordinator permissions.`
+      );
+    }
+
     return data;
   },
 

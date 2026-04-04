@@ -3,7 +3,7 @@ import { createBrowserRouter, Navigate, Outlet } from "react-router-dom";
 // Layouts
 import RootLayout from "../components/layout/RootLayout";
 import ProtectedRoute from "../components/layout/ProtectedRoute";
-import RouteErrorPage from "../components/ui/RouteErrorPage"
+import RouteErrorPage from "../components/ui/RouteErrorPage";
 
 // Auth Views
 import Login from "../views/auth/Login";
@@ -24,8 +24,9 @@ import LogbookManager from "../features/logbook/LogbookManager";
 // Organization Views (Release 1.0)
 import OrgPortal from "../views/organization/Portal";
 import OrgRequirements from "../views/organization/Requirements";
-import DashboardLayout from "../components/layout/DashboardLayout";
 import OrgProfile from "../views/organization/OrgProfile";
+import OrgApplications from "../views/organization/OrgApplications";
+import DashboardLayout from "../components/layout/DashboardLayout";
 
 // Coordinator Views (Release 1.0)
 import CoordinatorDashboard from "../views/admin/CoordinatorDashboard";
@@ -37,9 +38,6 @@ export const router = createBrowserRouter([
   {
     path: "/",
     element: <RootLayout />,
-    // React Router 7 catches route-level errors here BEFORE
-    // React's own Error Boundary. Without this, you get the
-    // default "Unexpected Application Error!" screen.
     errorElement: <RouteErrorPage />,
     children: [
       // ── Public Routes ──
@@ -83,6 +81,7 @@ export const router = createBrowserRouter([
           { path: "portal", element: <OrgPortal /> },
           { path: "profile", element: <OrgProfile /> },
           { path: "requirements", element: <OrgRequirements /> },
+          { path: "applications", element: <OrgApplications /> },
         ],
       },
 
