@@ -54,12 +54,13 @@ export const AuthContextProvider = ({ children }) => {
           full_name:  metadata.full_name,
           role:       metadata.role,
           student_id: metadata.student_id || null,
-          avatar_url: metadata.avatar_url || `https://ui-avatars.com/api/?name=${metadata.full_name}`,
+          // ── org-specific fields ──
+          industry:   metadata.industry   || null,
+          // ── avatar fallback ──
+          avatar_url: metadata.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(metadata.full_name)}`,
         },
       },
     });
-
-  
 
     return error ? { success: false, error: error.message } : { success: true, data };
   };
@@ -101,7 +102,6 @@ export const AuthContextProvider = ({ children }) => {
   useEffect(() => {
     const initializeAuth = async () => {
       const { data: { session } } = await supabase.auth.getSession();
-    
       setSession(session);
       if (session?.user) {
         setUserRole(session.user.user_metadata.role);
