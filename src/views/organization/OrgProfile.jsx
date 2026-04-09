@@ -22,6 +22,17 @@ import Input from "../../components/ui/Input";
 import SearchableSelect from "../../components/ui/SearchableSelect";
 import { SUGGESTED_INDUSTRIES, BOTSWANA_LOCATIONS } from "../../constants/matchingOptions";
 
+// ── Fields required for an org to be considered "Verified Partner" ──
+// All five must be non-empty for onboarding_complete to flip to true.
+const isProfileComplete = (p) =>
+  Boolean(
+    p.org_name?.trim() &&
+    p.industry?.trim() &&
+    p.location?.trim() &&
+    p.contact_person?.trim() &&
+    p.supervisor_email?.trim()
+  );
+
 export default function OrgProfile() {
   const { user } = UserAuth();
   const { avatarUrl, refreshAvatar } = useAvatar() || {};
@@ -91,8 +102,25 @@ export default function OrgProfile() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      await orgService.updateOrgProfile(user.id, profile);
-      setMessage({ type: "success", text: "Profile saved successfully!" });
+      // Auto-compute onboarding_complete — flips to true when all
+      // required fields are filled, back to false if any are removed.
+      const updatedProfile = {
+        ...profile,
+        onboarding_complete: isProfileComplete(profile),
+      };
+
+      await orgService.updateOrgProfile(user.id, updatedProfile);
+
+      // Update local state so the badge reflects the new status immediately
+      setProfile(updatedProfile);
+
+      setMessage({
+        type: "success",
+        text: updatedProfile.onboarding_complete
+          ? "Profile saved — organisation is now verified! ✓"
+          : "Profile saved. Fill in all required fields to become a Verified Partner.",
+      });
+
       setTimeout(() => navigate("/org/portal"), 1500);
     } catch (err) {
       setMessage({ type: "error", text: err.message || "Failed to save profile." });
@@ -100,6 +128,15 @@ export default function OrgProfile() {
       setSaving(false);
     }
   };
+
+  // Derived — shows the coordinator what's still missing
+  const missingFields = [
+    !profile.org_name?.trim()        && "Organisation Name",
+    !profile.industry?.trim()         && "Industry",
+    !profile.location?.trim()         && "Location",
+    !profile.contact_person?.trim()   && "Contact Person",
+    !profile.supervisor_email?.trim() && "Supervisor Email",
+  ].filter(Boolean);
 
   if (loading) return (
     <div className="flex items-center justify-center min-h-[60vh]">
@@ -177,6 +214,7 @@ export default function OrgProfile() {
             </label>
           </div>
 
+          {/* Verification badge */}
           <div className={`p-4 rounded-2xl border flex items-center gap-3 ${
             profile.onboarding_complete
               ? "bg-green-50 border-green-100"
@@ -186,9 +224,16 @@ export default function OrgProfile() {
               className={profile.onboarding_complete ? "text-green-500" : "text-amber-500"}
               size={20}
             />
-            <span className="text-xs font-bold text-brand-900">
-              {profile.onboarding_complete ? "Verified Partner" : "Pending Verification"}
-            </span>
+            <div className="min-w-0">
+              <p className="text-xs font-bold text-brand-900">
+                {profile.onboarding_complete ? "Verified Partner" : "Pending Verification"}
+              </p>
+              {!profile.onboarding_complete && missingFields.length > 0 && (
+                <p className="text-[10px] text-amber-600 font-semibold mt-0.5 leading-tight">
+                  Missing: {missingFields.join(", ")}
+                </p>
+              )}
+            </div>
           </div>
         </div>
 
