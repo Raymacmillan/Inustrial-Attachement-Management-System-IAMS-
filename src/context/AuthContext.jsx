@@ -26,14 +26,20 @@ export const AuthContextProvider = ({ children }) => {
 
   const isValidStudentId = (id) => /^\d{9}$/.test(id);
 
+  // ── signUpNewUser ──────────────────────────────────────────────────────────
+  // Every code path MUST return { success, error } or { success, data }.
+  
   const signUpNewUser = async (email, password, metadata, restrictToUB = false) => {
+
+    // 1. UB email restriction for students
     if (restrictToUB && !email.endsWith("@ub.ac.bw")) {
       return { success: false, error: "Please use your official @ub.ac.bw email." };
     }
 
-    const idFromEmail = email.split("@")[0];
-
+    // 2. Student-specific validation
     if (metadata.role === "student") {
+      const idFromEmail = email.split("@")[0];
+
       if (!isValidStudentId(metadata.student_id)) {
         return { success: false, error: "Student ID must be exactly 9 digits." };
       }
@@ -42,10 +48,12 @@ export const AuthContextProvider = ({ children }) => {
       }
     }
 
+    // 3. Password strength
     if (!isPasswordStrong(password)) {
       return { success: false, error: "Password too weak. Use uppercase, numbers, and symbols." };
     }
 
+    // 4. Call Supabase Auth
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -54,15 +62,28 @@ export const AuthContextProvider = ({ children }) => {
           full_name:  metadata.full_name,
           role:       metadata.role,
           student_id: metadata.student_id || null,
-          // ── org-specific fields ──
           industry:   metadata.industry   || null,
-          // ── avatar fallback ──
-          avatar_url: metadata.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(metadata.full_name)}`,
+          avatar_url: metadata.avatar_url ||
+            `https://ui-avatars.com/api/?name=${encodeURIComponent(metadata.full_name)}`,
         },
       },
     });
 
-    return error ? { success: false, error: error.message } : { success: true, data };
+    // 5. Handle Supabase error
+    if (error) return { success: false, error: error.message };
+
+    // 6. Detect repeated signup — Supabase returns identities: [] when the
+    //    email already exists (email enumeration protection).
+    //    Without this check the frontend shows a fake verification screen.
+    if (data?.user?.identities?.length === 0) {
+      return {
+        success: false,
+        error: "An account with this email already exists. Please sign in instead.",
+      };
+    }
+
+    // 7. Success
+    return { success: true, data };
   };
 
   const signInUser = async (email, password) => {
@@ -103,9 +124,7 @@ export const AuthContextProvider = ({ children }) => {
     const initializeAuth = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       setSession(session);
-      if (session?.user) {
-        setUserRole(session.user.user_metadata.role);
-      }
+      if (session?.user) setUserRole(session.user.user_metadata.role);
       setLoading(false);
     };
 
@@ -122,7 +141,7 @@ export const AuthContextProvider = ({ children }) => {
 
   const value = useMemo(() => ({
     session,
-    user: session?.user ?? null,
+    user:     session?.user ?? null,
     userRole,
     loading,
     signInUser,

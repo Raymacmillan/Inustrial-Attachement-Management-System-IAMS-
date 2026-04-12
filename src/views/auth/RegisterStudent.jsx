@@ -8,21 +8,24 @@ import {
   User, Hash, Mail, Lock, ArrowRight, MailCheck, AlertCircle, GraduationCap,
 } from "lucide-react";
 
+
+const isFullName = (name) => /\S+\s+\S+/.test(name.trim());
+
 export default function RegisterStudent() {
-  const [email, setEmail]                               = useState("");
-  const [password, setPassword]                         = useState("");
-  const [confirmPassword, setConfirmPassword]           = useState("");
-  const [fullName, setFullName]                         = useState("");
-  const [studentId, setStudentId]                       = useState("");
-  const [error, setError]                               = useState("");
-  const [loading, setLoading]                           = useState(false);
-  const [isFocused, setIsFocused]                       = useState(false);
+  const [email, setEmail]                                 = useState("");
+  const [password, setPassword]                           = useState("");
+  const [confirmPassword, setConfirmPassword]             = useState("");
+  const [fullName, setFullName]                           = useState("");
+  const [studentId, setStudentId]                         = useState("");
+  const [error, setError]                                 = useState("");
+  const [loading, setLoading]                             = useState(false);
+  const [isFocused, setIsFocused]                         = useState(false);
   const [isPendingVerification, setIsPendingVerification] = useState(false);
 
   const { signUpNewUser } = UserAuth();
-  const navigate = useNavigate();
+  const navigate          = useNavigate();
 
-  // Derived — live check as user types
+  // Derived — live password mismatch feedback
   const passwordsMatch = confirmPassword === "" || password === confirmPassword;
   const showConfirm    = password.length > 0;
 
@@ -30,20 +33,38 @@ export default function RegisterStudent() {
     e.preventDefault();
     setError("");
 
+    // ── All client-side checks BEFORE calling the API ──
+    if (!isFullName(fullName)) {
+      setError("Please enter your full name — first and last name are required.");
+      return;
+    }
+
     if (password !== confirmPassword) {
       setError("Passwords do not match. Please check and try again.");
       return;
     }
 
     setLoading(true);
-    const metadata = { full_name: fullName, student_id: studentId, role: "student" };
-    const { success, error: authError } = await signUpNewUser(email, password, metadata, true);
+
+    const metadata = { full_name: fullName.trim(), student_id: studentId, role: "student" };
+
+    // signUpNewUser always returns { success, error } or { success, data }
+    // so destructuring is always safe after the client-side checks above
+    const result = await signUpNewUser(email, password, metadata, true);
+
     setLoading(false);
+
+    if (!result) {
+      setError("An unexpected error occurred. Please try again.");
+      return;
+    }
+
+    const { success, error: authError } = result;
 
     if (success) {
       setIsPendingVerification(true);
     } else {
-      setError(authError);
+      setError(authError || "Registration failed. Please try again.");
     }
   };
 
@@ -58,9 +79,12 @@ export default function RegisterStudent() {
           <h2 className="font-display text-3xl text-brand-900 mb-3 font-bold">Check Your Email</h2>
           <p className="text-gray-500 mb-8 leading-relaxed">
             Activation link sent to{" "}
-            <span className="font-bold text-brand-600">{email}</span>. Use your UB student mail to verify.
+            <span className="font-bold text-brand-600">{email}</span>.{" "}
+            Use your UB student mail to verify.
           </p>
-          <Button onClick={() => navigate("/login")} fullWidth size="lg">Return to Login</Button>
+          <Button onClick={() => navigate("/login")} fullWidth size="lg">
+            Return to Login
+          </Button>
         </div>
       </div>
     );
@@ -105,7 +129,7 @@ export default function RegisterStudent() {
                 </div>
               )}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div className="space-y-1.5">
                 <Input
                   label="Full Name"
                   icon={<User size={18} />}
@@ -114,16 +138,23 @@ export default function RegisterStudent() {
                   onChange={e => setFullName(e.target.value)}
                   required
                 />
-                <Input
-                  label="Student ID"
-                  icon={<Hash size={18} />}
-                  placeholder="202300000"
-                  value={studentId}
-                  onChange={e => setStudentId(e.target.value)}
-                  maxLength={9}
-                  required
-                />
+                {/* Live hint — shows while typing before a second word exists */}
+                {fullName.trim().length > 0 && !isFullName(fullName) && (
+                  <p className="text-xs text-amber-600 font-bold pl-1 flex items-center gap-1">
+                    <AlertCircle size={11} /> Please enter both your first and last name
+                  </p>
+                )}
               </div>
+
+              <Input
+                label="Student ID"
+                icon={<Hash size={18} />}
+                placeholder="202300000"
+                value={studentId}
+                onChange={e => setStudentId(e.target.value)}
+                maxLength={9}
+                required
+              />
 
               <Input
                 label="UB Email Address"
@@ -150,7 +181,6 @@ export default function RegisterStudent() {
                 <PasswordStrengthMeter password={password} isFocused={isFocused} />
               </div>
 
-              {/* Confirm password — shows as soon as the user starts typing a password */}
               {showConfirm && (
                 <div className="space-y-1.5">
                   <Input
@@ -162,7 +192,6 @@ export default function RegisterStudent() {
                     placeholder="••••••••"
                     required
                   />
-                  {/* Inline live mismatch feedback — visible as user types */}
                   {!passwordsMatch && (
                     <p className="text-xs font-bold text-red-500 flex items-center gap-1.5 pl-1">
                       <AlertCircle size={12} /> Passwords do not match

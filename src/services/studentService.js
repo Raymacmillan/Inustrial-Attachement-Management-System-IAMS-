@@ -22,7 +22,6 @@ export const updateStudentProfile = async (userId, updates) => {
     .from("student_profiles")
     .update({
       ...updates,
-      onboarding_complete: true,
       updated_at: new Date().toISOString(),
     })
     .eq("id", userId)
@@ -30,7 +29,48 @@ export const updateStudentProfile = async (userId, updates) => {
     .single();
 
   if (error) throw error;
-  // single() guarantees data is not null if no error — safe to return directly
+  return data;
+};
+
+/**
+ * @description Fetches the student's active placement with full org and supervisor details.
+ * Returns null if the student has not yet been placed.
+ *
+ * Joins:
+ *   organization_profiles — org name, location, industry, contact phone
+ *
+ * Supervisor fields come directly from the placements table:
+ *   industrial_supervisor_name/email  — auto-filled from org at allocation time
+ *   university_supervisor_name/email  — assigned by coordinator via Student Audit Modal
+ */
+export const getStudentPlacement = async (studentId) => {
+  const { data, error } = await supabase
+    .from("placements")
+    .select(`
+      id,
+      position_title,
+      status,
+      start_date,
+      end_date,
+      duration_weeks,
+      industrial_supervisor_name,
+      industrial_supervisor_email,
+      university_supervisor_name,
+      university_supervisor_email,
+      organization_profiles (
+        org_name,
+        location,
+        industry,
+        contact_phone,
+        avatar_url
+      )
+    `)
+    .eq("student_id", studentId)
+    .eq("status", "active")
+    .maybeSingle();
+
+  // PGRST116 = no rows — student not yet placed, not an error
+  if (error && error.code !== "PGRST116") throw error;
   return data;
 };
 

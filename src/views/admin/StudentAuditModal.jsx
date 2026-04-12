@@ -1,10 +1,9 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  X, FileText, ExternalLink,
-  MapPin, Info, Edit3,
+  X, FileText, ExternalLink, MapPin, Info, Edit3,
   Check, ChevronDown, ChevronUp, AlertCircle, Zap,
-  User, Mail,
+  Calendar, User, Mail, UserCheck, Save,
 } from "lucide-react";
 import Button from "../../components/ui/Button";
 import Badge from "../../components/ui/Badge";
@@ -25,8 +24,7 @@ function Section({ title, icon: Icon, defaultOpen = false, children }) {
         </span>
         {open
           ? <ChevronUp size={16} className="text-gray-400" />
-          : <ChevronDown size={16} className="text-gray-400" />
-        }
+          : <ChevronDown size={16} className="text-gray-400" />}
       </button>
       {open && <div className="px-5 pb-5">{children}</div>}
     </div>
@@ -61,7 +59,7 @@ function DocCard({ label, url }) {
   );
 }
 
-// ── Supervisor input field ────────────────────────────────────────────
+// ── Supervisor input ──────────────────────────────────────────────────
 function SupervisorInput({ label, icon: Icon, value, onChange, type = "text", placeholder }) {
   return (
     <div className="space-y-1">
@@ -83,14 +81,21 @@ function SupervisorInput({ label, icon: Icon, value, onChange, type = "text", pl
 // ── Main modal ────────────────────────────────────────────────────────
 export default function StudentAuditModal({ isOpen, onClose, student, onUpdate }) {
   const navigate = useNavigate();
+
+  // Status
   const [status, setStatus]       = useState(student?.status || "pending");
   const [saving, setSaving]       = useState(false);
   const [saved, setSaved]         = useState(false);
   const [saveError, setSaveError] = useState("");
 
-  // Placement + supervisor state
-  const [placement, setPlacement]                 = useState(null);
-  const [supervisorForm, setSupervisorForm]       = useState({
+  // Placement + dates
+  const [placement, setPlacement]           = useState(null);
+  const [dateForm, setDateForm]             = useState({ start_date: "", end_date: "" });
+  const [savingDates, setSavingDates]       = useState(false);
+  const [datesSaved, setDatesSaved]         = useState(false);
+
+  // Supervisors
+  const [supervisorForm, setSupervisorForm] = useState({
     industrial_supervisor_name:  "",
     industrial_supervisor_email: "",
     university_supervisor_name:  "",
@@ -103,20 +108,27 @@ export default function StudentAuditModal({ isOpen, onClose, student, onUpdate }
     if (!student) return;
     setStatus(student.status || "pending");
     setSaveError("");
+    setSaved(false);
+    setDatesSaved(false);
     setSupervisorSaved(false);
     setPlacement(null);
 
-    // Only fetch placement for matched/allocated students
+    // Fetch active placement for matched/allocated students
     if (student.status === "matched" || student.status === "allocated") {
       supabase
         .from("placements")
         .select(`
           id,
+          start_date,
+          end_date,
+          duration_weeks,
+          position_title,
           industrial_supervisor_name,
           industrial_supervisor_email,
           university_supervisor_name,
           university_supervisor_email,
           organization_profiles (
+            org_name,
             contact_person,
             supervisor_email
           )
@@ -127,20 +139,16 @@ export default function StudentAuditModal({ isOpen, onClose, student, onUpdate }
         .then(({ data }) => {
           if (!data) return;
           setPlacement(data);
-
+          setDateForm({
+            start_date: data.start_date || "",
+            end_date:   data.end_date   || "",
+          });
           const org = data.organization_profiles || {};
-
-          // Auto-populate industrial supervisor from org profile if not already set.
-          // The coordinator can override these values — they are just sensible defaults.
           setSupervisorForm({
-            industrial_supervisor_name:
-              data.industrial_supervisor_name || org.contact_person || "",
-            industrial_supervisor_email:
-              data.industrial_supervisor_email || org.supervisor_email || "",
-            university_supervisor_name:
-              data.university_supervisor_name || "",
-            university_supervisor_email:
-              data.university_supervisor_email || "",
+            industrial_supervisor_name:  data.industrial_supervisor_name  || org.contact_person  || "",
+            industrial_supervisor_email: data.industrial_supervisor_email || org.supervisor_email || "",
+            university_supervisor_name:  data.university_supervisor_name  || "",
+            university_supervisor_email: data.university_supervisor_email || "",
           });
         });
     }
@@ -149,7 +157,20 @@ export default function StudentAuditModal({ isOpen, onClose, student, onUpdate }
   if (!student || !isOpen) return null;
 
   const prefs = student.student_preferences || {};
+  const isPlaced = student.status === "matched" || student.status === "allocated";
 
+  // ── Calculate duration from selected dates ──
+  const calcWeeks = () => {
+    if (!dateForm.start_date || !dateForm.end_date) return null;
+    const diff = new Date(dateForm.end_date) - new Date(dateForm.start_date);
+    return Math.max(Math.round(diff / (1000 * 60 * 60 * 24 * 7)), 1);
+  };
+
+  const formatDate = (d) => d
+    ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
+    : "—";
+
+  // ── Save status ──
   const handleStatusSave = async () => {
     if (status === student.status) return;
     setSaving(true);
@@ -166,11 +187,36 @@ export default function StudentAuditModal({ isOpen, onClose, student, onUpdate }
     }
   };
 
-  const handleMatchStudent = () => {
-    onClose();
-    navigate("/coordinator/matching");
+  // ── Save placement dates ──
+  const handleDatesSave = async () => {
+    if (!placement?.id) return;
+    if (!dateForm.start_date || !dateForm.end_date) return;
+    if (new Date(dateForm.end_date) <= new Date(dateForm.start_date)) {
+      setSaveError("End date must be after start date.");
+      return;
+    }
+    setSavingDates(true);
+    try {
+      const weeks = calcWeeks();
+      const { error } = await supabase
+        .from("placements")
+        .update({
+          start_date:     dateForm.start_date,
+          end_date:       dateForm.end_date,
+          duration_weeks: weeks,
+        })
+        .eq("id", placement.id);
+      if (error) throw error;
+      setDatesSaved(true);
+      setTimeout(() => setDatesSaved(false), 2500);
+    } catch (err) {
+      setSaveError(err.message || "Failed to update dates.");
+    } finally {
+      setSavingDates(false);
+    }
   };
 
+  // ── Save supervisors ──
   const handleSupervisorSave = async () => {
     if (!placement?.id) return;
     setSavingSupervisors(true);
@@ -183,13 +229,13 @@ export default function StudentAuditModal({ isOpen, onClose, student, onUpdate }
       setSupervisorSaved(true);
       setTimeout(() => setSupervisorSaved(false), 2500);
     } catch (err) {
-      console.error("Failed to save supervisors:", err.message);
+      setSaveError(err.message || "Failed to save supervisors.");
     } finally {
       setSavingSupervisors(false);
     }
   };
 
-  const isAlreadyPlaced = student.status === "matched" || student.status === "allocated";
+  const weeks = calcWeeks();
 
   return (
     <div className="fixed inset-0 z-[150] flex flex-col bg-gray-50 animate-in slide-in-from-bottom duration-300">
@@ -234,11 +280,22 @@ export default function StudentAuditModal({ isOpen, onClose, student, onUpdate }
             </div>
             <div>
               <div className="flex justify-center mt-1">
-                <Badge variant={isAlreadyPlaced ? "success" : "warning"}>{student.status}</Badge>
+                <Badge variant={isPlaced ? "success" : "warning"}>{student.status}</Badge>
               </div>
               <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mt-1">Status</p>
             </div>
           </div>
+
+          {/* Error banner */}
+          {saveError && (
+            <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-100 rounded-xl">
+              <AlertCircle size={14} className="text-red-500 shrink-0" />
+              <p className="text-xs font-bold text-red-600">{saveError}</p>
+              <button onClick={() => setSaveError("")} className="ml-auto text-red-400 hover:text-red-600 cursor-pointer">
+                <X size={12} />
+              </button>
+            </div>
+          )}
 
           <Section title="Documents" icon={FileText} defaultOpen={true}>
             <div className="space-y-3">
@@ -247,7 +304,7 @@ export default function StudentAuditModal({ isOpen, onClose, student, onUpdate }
             </div>
           </Section>
 
-          <Section title="Skill Matrix" icon={Info} defaultOpen={true}>
+          <Section title="Skill Matrix" icon={Info} defaultOpen={false}>
             {prefs.technical_skills?.length > 0 ? (
               <div className="flex flex-wrap gap-2">
                 {prefs.technical_skills.map((s, i) => (
@@ -286,12 +343,77 @@ export default function StudentAuditModal({ isOpen, onClose, student, onUpdate }
             </div>
           </Section>
 
-          {/* ── Supervisor Assignment — only for placed students ── */}
+          {/* ── Placement dates — only shown when placed ── */}
           {placement && (
-            <Section title="Supervisor Assignment" icon={User} defaultOpen={true}>
+            <Section title="Attachment Dates" icon={Calendar} defaultOpen={true}>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">
+                    Placement at {placement.organization_profiles?.org_name}
+                  </p>
+                  <span className="text-[9px] font-black text-brand-500 uppercase tracking-widest bg-brand-50 px-2 py-0.5 rounded-lg">
+                    {placement.position_title}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">
+                      Start Date
+                    </label>
+                    <input
+                      type="date"
+                      value={dateForm.start_date}
+                      onChange={e => setDateForm(f => ({ ...f, start_date: e.target.value }))}
+                      className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-brand-500 outline-none cursor-pointer"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">
+                      End Date
+                    </label>
+                    <input
+                      type="date"
+                      value={dateForm.end_date}
+                      min={dateForm.start_date}
+                      onChange={e => setDateForm(f => ({ ...f, end_date: e.target.value }))}
+                      className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-brand-500 outline-none cursor-pointer"
+                    />
+                  </div>
+                </div>
+
+                {weeks && (
+                  <p className="text-xs font-bold text-brand-600 bg-brand-50 px-3 py-2 rounded-xl">
+                    Duration: {weeks} week{weeks !== 1 ? "s" : ""}
+                    {dateForm.start_date && dateForm.end_date && (
+                      <span className="text-gray-400 font-normal ml-2">
+                        ({formatDate(dateForm.start_date)} → {formatDate(dateForm.end_date)})
+                      </span>
+                    )}
+                  </p>
+                )}
+
+                <Button
+                  size="sm"
+                  loading={savingDates}
+                  variant={datesSaved ? "secondary" : "primary"}
+                  onClick={handleDatesSave}
+                >
+                  {datesSaved
+                    ? <span className="flex items-center gap-1"><Check size={14} /> Dates Saved</span>
+                    : <span className="flex items-center gap-1"><Save size={14} /> Save Dates</span>
+                  }
+                </Button>
+              </div>
+            </Section>
+          )}
+
+          {/* ── Supervisor Assignment — only when placed ── */}
+          {placement && (
+            <Section title="Supervisor Assignment" icon={UserCheck} defaultOpen={true}>
               <div className="space-y-5">
 
-                {/* Industrial supervisor — auto-filled from org, editable */}
+                {/* Industrial supervisor — auto-filled from org */}
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">
@@ -320,7 +442,7 @@ export default function StudentAuditModal({ isOpen, onClose, student, onUpdate }
                   </div>
                 </div>
 
-                {/* University supervisor — manual entry */}
+                {/* University supervisor */}
                 <div className="space-y-3 pt-3 border-t border-gray-100">
                   <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">
                     University Supervisor (UB Department)
@@ -351,14 +473,15 @@ export default function StudentAuditModal({ isOpen, onClose, student, onUpdate }
                   onClick={handleSupervisorSave}
                 >
                   {supervisorSaved
-                    ? <span className="flex items-center gap-1"><Check size={14} /> Saved</span>
-                    : "Save Supervisors"
+                    ? <span className="flex items-center gap-1"><Check size={14} /> Supervisors Saved</span>
+                    : <span className="flex items-center gap-1"><Save size={14} /> Save Supervisors</span>
                   }
                 </Button>
               </div>
             </Section>
           )}
 
+          {/* ── Coordinator Actions ── */}
           <Section title="Coordinator Actions" icon={Edit3} defaultOpen={true}>
             <div className="space-y-4">
               <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-2">
@@ -388,12 +511,6 @@ export default function StudentAuditModal({ isOpen, onClose, student, onUpdate }
                   }
                 </Button>
               </div>
-              {saveError && (
-                <div className="flex items-center gap-2 mt-2 p-3 bg-red-50 border border-red-100 rounded-xl">
-                  <AlertCircle size={14} className="text-red-500 shrink-0" />
-                  <p className="text-xs font-bold text-red-600">{saveError}</p>
-                </div>
-              )}
             </div>
           </Section>
         </div>
@@ -404,11 +521,11 @@ export default function StudentAuditModal({ isOpen, onClose, student, onUpdate }
         <Button variant="ghost" onClick={onClose}>Close</Button>
         <Button
           size="lg"
-          onClick={handleMatchStudent}
-          disabled={isAlreadyPlaced}
+          onClick={() => { onClose(); navigate("/coordinator/matching"); }}
+          disabled={isPlaced}
         >
           <Zap size={16} fill="currentColor" />
-          {isAlreadyPlaced ? "Already Matched" : "Match Student"}
+          {isPlaced ? "Already Matched" : "Match Student"}
         </Button>
       </footer>
     </div>
