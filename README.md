@@ -54,8 +54,7 @@ Adds weekly logbooks, supervisor assessment portals, and automated reminders.
 | Layer | Technology |
 |---|---|
 | Frontend | React 19, Vite 7, React Router 7 |
-| Styling | Tailwind CSS v4, |
-| Animations | Framer Motion |
+| Styling | Tailwind CSS v4 |
 | Backend / Database | Supabase (PostgreSQL) |
 | Auth | Supabase Auth (email + JWT) |
 | Edge Functions | Deno (Supabase Edge Runtime) |
@@ -68,27 +67,27 @@ Adds weekly logbooks, supervisor assessment portals, and automated reminders.
 ## Features
 
 ### Student Portal
-- Register with UB email (`@ub.ac.bw`) and student ID
+- Register with UB email (`@ub.ac.bw`) and student ID — full name (first + last) required
 - Upload CV and certified transcript (both required for matching eligibility)
 - Set career preferences — skills, preferred locations, preferred roles
-- View active placement and assigned supervisor details
+- View active placement: org, role, dates, days remaining, and assigned supervisors
 
 ### Organisation Portal
 - Register and complete organisation profile
 - Auto-verified ("Verified Partner") when all required fields are filled
 - Create and manage internship vacancies with skill requirements and GPA minimum
 - Toggle CV/transcript requirements per organisation
-- View placed students and their logbook submissions (Release 2)
+- Manage supervisor roster — multiple supervisors with specific role titles
 
 ### Coordinator Dashboard
 - View all students, organisations, and active placements
-- Run the heuristic matching engine to generate placement suggestions
-- Auto-allocate multiple students in a batch or manually assign individually
-- Doc enforcement — allocation blocked if org requires a doc the student hasn't uploaded
-- Assign industrial and university supervisors per placement
+- Run the heuristic matching engine — slot-aware, one suggestion per student
+- Batch allocate students: set custom start/end dates, pick supervisor from org roster
+- Doc enforcement — allocation blocked if org requires a doc the student is missing
+- Edit placement dates and assign supervisors per student via Student Audit Modal
 - Update student attachment status (pending → matched → allocated → completed)
 
-### Matching Engine (Supabase Edge Function)
+### Matching Engine (Supabase Edge Function v5)
 Scores every student against every active vacancy using three criteria:
 
 | Criterion | Weight | Logic |
@@ -97,7 +96,7 @@ Scores every student against every active vacancy using three criteria:
 | GPA | 30 pts | `gpa / 5.0 × 30` (only if ≥ min_gpa_required) |
 | Location | 20 pts | Flat 20pts if student's preferred location matches org location |
 
-Returns one result per student (best vacancy match), sorted by score descending. Students with missing required documents are flagged with a `doc_warning` and blocked from allocation.
+Returns one result per student (best vacancy match), capped at `available_slots` per vacancy. Students displaced by a full vacancy are redirected to their next-best match. Students with missing required documents are flagged and blocked from allocation.
 
 ---
 
@@ -133,11 +132,11 @@ src/
 └── setupTests.js
 
 supabase/
-└── functions/
-    └── match-engine/    # Deno edge function — scoring and deduplication
-└── migrations├── 001_iams_schema.sql  # Consolidated database migration
-
-    
+├── functions/
+│   └── match-engine/    # Deno edge function — slot-aware scoring v5
+│       └── index.ts
+└── migrations/
+    └── 001_iams_schema.sql  # Consolidated schema migration
 
 docs/
 └── TESTING.md           # Full test suite documentation
@@ -206,7 +205,7 @@ These are available in your Supabase project under **Settings → API**.
 Run the consolidated migration against a fresh Supabase project:
 
 1. Open your Supabase project → **SQL Editor**
-2. Paste the contents of `docs/001_iams_schema.sql`
+2. Paste the contents of `supabase/migrations/001_iams_schema.sql`
 3. Click **Run**
 
 This creates all tables, functions, triggers, and RLS policies in one shot.
@@ -216,18 +215,19 @@ This creates all tables, functions, triggers, and RLS policies in one shot.
 ```
 auth.users (Supabase managed)
     │
-    ├── user_roles              — role per user (student | org | coordinator)
-    ├── student_profiles        — student academic data, doc URLs, status
-    ├── organization_profiles   — org details, doc requirements, verification status
+    ├── user_roles                 — role per user (student | org | coordinator)
+    ├── student_profiles           — student academic data, doc URLs, status
+    ├── organization_profiles      — org details, doc requirements, verification status
     │
-    ├── student_preferences     — skills, locations, roles for matching engine
-    ├── organization_vacancies  — internship roles with skill requirements and slots
+    ├── organization_supervisors   — supervisor roster per org (multiple, with role titles)
+    ├── student_preferences        — skills, locations, roles for matching engine
+    ├── organization_vacancies     — internship roles with skill requirements and slots
     │
-    ├── placements              — active/completed student ↔ org assignments
-    │       └── university_supervisors   — UB lecturer roster (Release 2)
+    ├── placements                 — active/completed student ↔ org assignments
+    │       └── university_supervisors  — UB lecturer roster (Release 2)
     │
-    ├── logbook_weeks           — weekly logbook containers (Release 2)
-    └── daily_logs              — individual day entries (Release 2)
+    ├── logbook_weeks              — weekly logbook containers (Release 2)
+    └── daily_logs                 — individual day entries (Release 2)
 ```
 
 ### Key Functions
@@ -238,6 +238,16 @@ auth.users (Supabase managed)
 | `handle_new_user()` | Trigger — creates student/org profile row on signup |
 | `handle_new_user_role()` | Trigger — inserts role into user_roles on signup |
 | `decrement_vacancy_slots(vacancy_id)` | RPC — reduces available_slots by 1 after allocation, floor 0 |
+
+### DB Constraints
+
+| Constraint | Table | Rule |
+|---|---|---|
+| `full_name_requires_two_words` | `student_profiles` | Full name must contain at least two words |
+| `student_id UNIQUE` | `student_profiles` | No two students can share a student ID |
+| `email UNIQUE` | `student_profiles`, `organization_profiles` | One account per email |
+| `available_slots >= 1` | `organization_vacancies` | Vacancies must have at least one slot |
+| `gpa NUMERIC(3,2)` | `student_profiles` | GPA stored to 2 decimal places e.g. `3.00` |
 
 ### Creating a Coordinator
 
@@ -257,12 +267,23 @@ WHERE email = 'coordinator@ub.ac.bw';
 
 ## Edge Functions
 
-### match-engine (v4)
+### match-engine (v5)
 
-Deployed to Supabase Edge Functions. Scores all pending students against all active vacancies.
+Deployed to Supabase Edge Functions. Scores all pending students against all active vacancies with slot-aware deduplication.
 
 **Endpoint:** `POST /functions/v1/match-engine`
-**Auth:** JWT not required (`verify_jwt: false`) — called server-side by coordinator only
+**Auth:** JWT not required (`verify_jwt: false`) — called by coordinator dashboard only
+
+**Scoring:**
+
+| Criterion | Max Points | Logic |
+|---|---|---|
+| Skills | 50 | Matched skills / required skills × 50 |
+| GPA | 30 | student GPA / 5.0 × 30 (only if above vacancy minimum) |
+| Location | 20 | Flat 20pts if preferred location matches org location |
+
+**Slot-aware deduplication (v5):**
+Each vacancy is suggested to at most `available_slots` students. The engine processes matches in score order — highest scorers claim slots first. Students displaced by a full vacancy are automatically redirected to their next-best matching vacancy. If all vacancies are at capacity for a student, they appear as unplaceable with a clear reason.
 
 **Response shape:**
 ```json
@@ -280,7 +301,8 @@ Deployed to Supabase Edge Functions. Scores all pending students against all act
     "doc_warning": "Missing: Transcript (required by Ryom)",
     "has_all_docs": false,
     "is_unplaceable": false,
-    "unplaceable_reason": null
+    "unplaceable_reason": null,
+    "available_slots": 3
   }
 ]
 ```
@@ -322,6 +344,11 @@ Satisfies the Definition of Done (Section 3.7 of Release and Sprint Planning doc
    - Build command: `npm run build`
    - Output directory: `dist`
 
+> **Important:** A `vercel.json` file must exist at the project root with an SPA rewrite rule so that React Router routes work on direct URL access and page refresh:
+> ```json
+> { "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }] }
+> ```
+
 ### Backend — Supabase
 
 No deployment needed — Supabase is already live. After getting your Vercel URL, update:
@@ -348,7 +375,6 @@ Redirect URLs:
 - **Weekly Logbook** (US-04) — Students submit daily activity logs per week; supervisors approve or flag
 - **Supervisor Reports** (US-05) — Industrial supervisors submit end-of-attachment performance reports
 - **Due Date Reminders** (US-06) — Automated email notifications for logbook deadlines and assessment submissions
-- **Batch Supervisor Assignment** — Coordinator selects multiple students and assigns a UB supervisor in one action
 - **Visit Assessment Module** — University supervisors record two physical visit assessments per student
 
 ---
@@ -380,5 +406,5 @@ chore: update TESTING.md with 52 test results
 
 **Before merging to develop:**
 - All tests must pass (`npm run test`)
-- No TypeScript/ESLint errors (`npm run build`)
+- No build errors (`npm run build`)
 - Peer reviewed by at least one team member

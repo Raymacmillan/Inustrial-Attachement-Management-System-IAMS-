@@ -67,17 +67,21 @@ CREATE TABLE public.user_roles (
 -- One row per registered student. Created by handle_new_user trigger.
 -- onboarding_complete flips true when name + student_id + major + gpa +
 -- cv_url + transcript_url are all filled — required before matching.
+--
+-- full_name: requires at least two words (first + last name).
+-- gpa: stored as NUMERIC(3,2) so 3 is always stored as 3.00.
 -- ---------------------------------------------------------------------------
 CREATE TABLE public.student_profiles (
   id                   UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  full_name            TEXT NOT NULL,
+  full_name            TEXT NOT NULL CONSTRAINT full_name_requires_two_words
+                         CHECK (full_name ~ '\S+\s+\S+'),
   email                TEXT NOT NULL UNIQUE,
   student_id           TEXT NOT NULL UNIQUE,
   avatar_url           TEXT,
   major                TEXT DEFAULT 'Computer Science',
   status               public.attachment_status DEFAULT 'pending',
   onboarding_complete  BOOLEAN DEFAULT false,
-  gpa                  NUMERIC,
+  gpa                  NUMERIC(3,2),
   phone_number         TEXT,
   gender               TEXT,
   year_of_study        INTEGER DEFAULT 3,
@@ -116,9 +120,37 @@ CREATE TABLE public.organization_profiles (
 );
 
 -- ---------------------------------------------------------------------------
+-- organization_supervisors
+-- Supervisor roster per organisation. An org can have multiple supervisors
+-- with different role titles.
+--
+-- Small orgs:  typically one row — "Industrial Supervisor"
+-- Large orgs:  multiple rows — "Technical Supervisor", "HR Coordinator", etc.
+--
+-- The coordinator picks which supervisor to assign when allocating a student.
+-- Soft-deleted (is_active = false) to preserve existing placement references.
+-- ---------------------------------------------------------------------------
+CREATE TABLE public.organization_supervisors (
+  id          UUID PRIMARY KEY DEFAULT extensions.uuid_generate_v4(),
+  org_id      UUID NOT NULL REFERENCES public.organization_profiles(id) ON DELETE CASCADE,
+  full_name   TEXT NOT NULL,
+  email       TEXT NOT NULL,
+  phone       TEXT,
+  role_title  TEXT NOT NULL DEFAULT 'Industrial Supervisor',
+  is_active   BOOLEAN NOT NULL DEFAULT true,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+COMMENT ON TABLE public.organization_supervisors IS
+  'Roster of supervisors per organisation. An org can have multiple supervisors '
+  'with different roles. The coordinator picks the appropriate supervisor when '
+  'allocating a student to a vacancy.';
+
+-- ---------------------------------------------------------------------------
 -- student_preferences
 -- Career preferences used as input to the matching engine.
--- technical_skills   → matched against vacancy.required_skills (50pts)
+-- technical_skills    → matched against vacancy.required_skills (50pts)
 -- preferred_locations → matched against org.location (20pts)
 -- ---------------------------------------------------------------------------
 CREATE TABLE public.student_preferences (
@@ -163,15 +195,15 @@ CREATE TABLE public.organization_vacancies (
 -- max_students caps how many students each supervisor can be assigned.
 -- ---------------------------------------------------------------------------
 CREATE TABLE public.university_supervisors (
-  id          UUID PRIMARY KEY DEFAULT extensions.uuid_generate_v4(),
-  full_name   TEXT NOT NULL,
-  email       TEXT NOT NULL UNIQUE,
-  department  TEXT NOT NULL DEFAULT 'Computer Science',
-  phone       TEXT,
+  id           UUID PRIMARY KEY DEFAULT extensions.uuid_generate_v4(),
+  full_name    TEXT NOT NULL,
+  email        TEXT NOT NULL UNIQUE,
+  department   TEXT NOT NULL DEFAULT 'Computer Science',
+  phone        TEXT,
   max_students INTEGER NOT NULL DEFAULT 10 CHECK (max_students >= 1),
-  is_active   BOOLEAN NOT NULL DEFAULT true,
-  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+  is_active    BOOLEAN NOT NULL DEFAULT true,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 COMMENT ON TABLE public.university_supervisors IS
@@ -384,6 +416,7 @@ $$;
 ALTER TABLE public.user_roles              ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.student_profiles        ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.organization_profiles   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.organization_supervisors ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.student_preferences     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.organization_vacancies  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.university_supervisors  ENABLE ROW LEVEL SECURITY;
@@ -428,7 +461,7 @@ CREATE POLICY "orgs_view_placed_student_profiles"
   USING (
     EXISTS (
       SELECT 1 FROM public.placements
-      WHERE placements.student_id    = student_profiles.id
+      WHERE placements.student_id      = student_profiles.id
         AND placements.organization_id = auth.uid()
         AND placements.status          = 'active'
     )
@@ -447,6 +480,23 @@ CREATE POLICY "Organizations can view their own profile"
 CREATE POLICY "Organizations can update their own profile"
   ON public.organization_profiles FOR UPDATE
   USING (auth.uid() = id);
+
+-- ── organization_supervisors ──────────────────────────────────────────────
+-- Orgs manage their own supervisor roster
+CREATE POLICY "orgs_manage_own_supervisors"
+  ON public.organization_supervisors FOR ALL
+  USING (auth.uid() = org_id)
+  WITH CHECK (auth.uid() = org_id);
+
+-- Coordinators can view and manage all org supervisors
+CREATE POLICY "coordinators_manage_org_supervisors"
+  ON public.organization_supervisors FOR ALL
+  USING (is_coordinator());
+
+-- Everyone can read supervisor info (students need to see their supervisor)
+CREATE POLICY "all_can_view_org_supervisors"
+  ON public.organization_supervisors FOR SELECT
+  USING (true);
 
 -- ── student_preferences ───────────────────────────────────────────────────
 CREATE POLICY "student_prefs_owner"
@@ -490,7 +540,7 @@ CREATE POLICY "coordinators_manage_placements"
   USING (is_coordinator());
 
 -- ── university_supervisors ────────────────────────────────────────────────
--- Everyone can read the supervisor roster
+-- Everyone can read the UB supervisor roster
 CREATE POLICY "all_can_view_supervisors"
   ON public.university_supervisors FOR SELECT
   USING (true);
@@ -539,5 +589,5 @@ CREATE POLICY "Organizations view assigned daily logs"
 -- =============================================================================
 -- END OF MIGRATION
 -- To apply: run this entire file in Supabase SQL Editor on a fresh project.
--- represents schema only.
+-- This file represents schema only — test data is seeded separately.
 -- =============================================================================
