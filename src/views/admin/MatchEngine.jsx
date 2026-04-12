@@ -1,23 +1,275 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Zap, CheckCircle2, Brain, AlertTriangle, FileWarning,
   Award, MapPin, ChevronDown, Play, SkipForward,
-  CheckSquare, Square, Loader2, X, ShieldAlert,
+  CheckSquare, Square, Loader2, X, Calendar, User,
+  Mail, UserCheck, ShieldAlert, ChevronRight,
 } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient";
 import Button from "../../components/ui/Button";
 import ConfirmModal from "../../components/ui/ConfirmModal";
 import Badge from "../../components/ui/Badge";
 
+// ── Batch Allocation Panel ────────────────────────────────────────────
+// Slides in from the right when students are selected.
+// Coordinator sets: start date, end date, university supervisor,
+// and optionally overrides the industrial supervisor.
+// Industrial supervisor options are loaded from organization_supervisors
+// for each org represented in the selected batch.
+function BatchPanel({ selectedMatches, onClose, onAllocate, isRunning }) {
+  const year = new Date().getFullYear();
+  const [startDate, setStartDate]     = useState(`${year}-06-01`);
+  const [endDate, setEndDate]         = useState(`${year}-07-27`);
+  const [uniSupervisorName, setUniSupervisorName]   = useState("");
+  const [uniSupervisorEmail, setUniSupervisorEmail] = useState("");
+  const [orgSupervisors, setOrgSupervisors]         = useState([]);
+  const [selectedSupervisorId, setSelectedSupervisorId] = useState("");
+  const [error, setError]             = useState("");
+
+  // Unique org IDs in the selected batch
+  const orgIds = [...new Set(selectedMatches.map(m => m.org_id).filter(Boolean))];
+
+  useEffect(() => {
+    if (orgIds.length === 0) return;
+    // Load supervisor roster for all orgs in the selection
+    supabase
+      .from("organization_supervisors")
+      .select("id, full_name, email, phone, role_title, org_id, organization_profiles(org_name)")
+      .in("org_id", orgIds)
+      .eq("is_active", true)
+      .order("role_title")
+      .then(({ data }) => setOrgSupervisors(data || []));
+  }, [selectedMatches.length]);
+
+  const weeks = startDate && endDate
+    ? Math.max(Math.round((new Date(endDate) - new Date(startDate)) / (1000 * 60 * 60 * 24 * 7)), 1)
+    : 8;
+
+  const selectedOrgSupervisor = orgSupervisors.find(s => s.id === selectedSupervisorId);
+
+  const handleConfirm = () => {
+    setError("");
+    if (!startDate || !endDate) { setError("Both dates are required."); return; }
+    if (new Date(endDate) <= new Date(startDate)) { setError("End date must be after start date."); return; }
+    onAllocate({
+      startDate,
+      endDate,
+      durationWeeks: weeks,
+      universitySupervisorName:  uniSupervisorName.trim()  || null,
+      universitySupervisorEmail: uniSupervisorEmail.trim() || null,
+      // Industrial supervisor override — only applied if coordinator picks one.
+      // If left blank, allocateOne falls back to the org's contact_person.
+      industrialSupervisorName:  selectedOrgSupervisor?.full_name  || null,
+      industrialSupervisorEmail: selectedOrgSupervisor?.email      || null,
+    });
+  };
+
+  return (
+    <div className="fixed inset-y-0 right-0 z-[100] w-full sm:w-[480px] bg-white shadow-2xl border-l border-gray-100 flex flex-col animate-in slide-in-from-right duration-300">
+
+      {/* Header */}
+      <div className="bg-brand-900 px-6 py-5 flex items-center justify-between shrink-0">
+        <div>
+          <h3 className="font-display text-lg font-bold text-white">Batch Allocation</h3>
+          <p className="text-brand-300 text-xs mt-0.5">
+            {selectedMatches.length} student{selectedMatches.length !== 1 ? "s" : ""} selected
+          </p>
+        </div>
+        <button onClick={onClose} className="text-brand-300 hover:text-white cursor-pointer">
+          <X size={20} />
+        </button>
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto p-6 space-y-6">
+
+        {/* Selected students summary */}
+        <div className="space-y-2">
+          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Selected Students</p>
+          <div className="space-y-2 max-h-36 overflow-y-auto pr-1">
+            {selectedMatches.map(m => (
+              <div key={m.student_id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-brand-900 truncate">{m.student_name}</p>
+                  <p className="text-[10px] text-gray-400 font-semibold truncate">{m.org_name} · {m.role}</p>
+                </div>
+                <span className="text-xs font-black text-brand-600 ml-2 shrink-0">{m.total_score}%</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Attachment dates */}
+        <div className="space-y-3">
+          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+            <Calendar size={12} /> Attachment Period
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">Start Date</label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={e => setStartDate(e.target.value)}
+                className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-brand-500 outline-none cursor-pointer"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">End Date</label>
+              <input
+                type="date"
+                value={endDate}
+                min={startDate}
+                onChange={e => setEndDate(e.target.value)}
+                className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-brand-500 outline-none cursor-pointer"
+              />
+            </div>
+          </div>
+          {startDate && endDate && new Date(endDate) > new Date(startDate) && (
+            <p className="text-xs font-bold text-brand-600 bg-brand-50 px-3 py-2 rounded-xl">
+              Duration: {weeks} week{weeks !== 1 ? "s" : ""}
+            </p>
+          )}
+        </div>
+
+        {/* Industrial supervisor selection */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+              <UserCheck size={12} /> Industrial Supervisor
+            </p>
+            <span className="text-[9px] text-gray-400 font-semibold">
+              From organisation roster
+            </span>
+          </div>
+
+          {orgSupervisors.length > 0 ? (
+            <div className="space-y-2">
+              {/* Show "Auto (from org)" option + all org supervisors */}
+              <label className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${
+                !selectedSupervisorId
+                  ? "border-brand-500 bg-brand-50"
+                  : "border-gray-100 bg-gray-50 hover:border-gray-200"
+              }`}>
+                <input
+                  type="radio"
+                  name="org_supervisor"
+                  value=""
+                  checked={!selectedSupervisorId}
+                  onChange={() => setSelectedSupervisorId("")}
+                  className="accent-brand-600"
+                />
+                <div>
+                  <p className="text-sm font-bold text-brand-900">Auto — from org profile</p>
+                  <p className="text-[10px] text-gray-400">Uses each org's default contact person</p>
+                </div>
+              </label>
+
+              {orgSupervisors.map(sup => (
+                <label
+                  key={sup.id}
+                  className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${
+                    selectedSupervisorId === sup.id
+                      ? "border-brand-500 bg-brand-50"
+                      : "border-gray-100 bg-gray-50 hover:border-gray-200"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="org_supervisor"
+                    value={sup.id}
+                    checked={selectedSupervisorId === sup.id}
+                    onChange={() => setSelectedSupervisorId(sup.id)}
+                    className="accent-brand-600"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-sm font-bold text-brand-900 truncate">{sup.full_name}</p>
+                      <span className="text-[9px] font-black text-brand-500 uppercase tracking-widest bg-brand-100 px-1.5 py-0.5 rounded-lg shrink-0">
+                        {sup.role_title}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-gray-400 truncate">{sup.email}</p>
+                    {/* Show org name if multiple orgs in batch */}
+                    {orgIds.length > 1 && sup.organization_profiles?.org_name && (
+                      <p className="text-[9px] text-gray-300 font-semibold">{sup.organization_profiles.org_name}</p>
+                    )}
+                  </div>
+                </label>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-gray-400 italic p-3 bg-gray-50 rounded-xl">
+              No supervisor roster found. Each org's contact person will be used automatically.
+            </p>
+          )}
+        </div>
+
+        {/* University supervisor */}
+        <div className="space-y-3 pt-3 border-t border-gray-100">
+          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+            <User size={12} /> University Supervisor (UB)
+          </p>
+          <p className="text-[10px] text-gray-400">
+            Assign one UB lecturer to oversee this entire batch. You can update per-student later.
+          </p>
+          <div className="space-y-2">
+            <div className="relative">
+              <User size={13} className="absolute left-3 top-3 text-gray-400" />
+              <input
+                type="text"
+                placeholder="e.g. Dr Jane Smith"
+                value={uniSupervisorName}
+                onChange={e => setUniSupervisorName(e.target.value)}
+                className="w-full pl-8 pr-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-500 outline-none"
+              />
+            </div>
+            <div className="relative">
+              <Mail size={13} className="absolute left-3 top-3 text-gray-400" />
+              <input
+                type="email"
+                placeholder="lecturer@ub.ac.bw"
+                value={uniSupervisorEmail}
+                onChange={e => setUniSupervisorEmail(e.target.value)}
+                className="w-full pl-8 pr-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-500 outline-none"
+              />
+            </div>
+          </div>
+        </div>
+
+        {error && (
+          <p className="text-xs font-bold text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-2">
+            {error}
+          </p>
+        )}
+      </div>
+
+      {/* Footer */}
+      <div className="p-6 border-t border-gray-100 space-y-3 shrink-0">
+        <Button
+          fullWidth
+          size="lg"
+          loading={isRunning}
+          onClick={handleConfirm}
+        >
+          <Play size={15} fill="currentColor" />
+          Allocate {selectedMatches.length} Student{selectedMatches.length !== 1 ? "s" : ""}
+        </Button>
+        <Button fullWidth variant="ghost" onClick={onClose}>Cancel</Button>
+      </div>
+    </div>
+  );
+}
+
 // ── Inline vacancy selector for manual allocation ─────────────────────
 function ManualAllocateRow({ student, vacancies, onAllocate, processing }) {
   const [selectedVacancy, setSelectedVacancy] = useState("");
   const vacancy = vacancies.find(v => v.id === selectedVacancy);
-  const hasDocBlock = Boolean(student.doc_warning);
+  const isDocBlocked = Boolean(student.doc_warning);
 
   return (
     <div className={`border-2 border-dashed rounded-2xl p-5 transition-all ${
-      hasDocBlock ? "border-red-200 bg-red-50/30" : "bg-white border-gray-200 hover:border-brand-200"
+      isDocBlocked ? "border-red-200 bg-red-50/30" : "bg-white border-gray-200 hover:border-brand-200"
     }`}>
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
         <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -27,7 +279,7 @@ function ManualAllocateRow({ student, vacancies, onAllocate, processing }) {
           <div className="min-w-0">
             <p className="font-bold text-brand-900 text-sm truncate">{student.student_name}</p>
             <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-              {hasDocBlock ? (
+              {isDocBlocked ? (
                 <span className="text-[9px] text-red-600 font-black uppercase flex items-center gap-1">
                   <ShieldAlert size={10} /> Cannot allocate — missing required docs
                 </span>
@@ -43,12 +295,12 @@ function ManualAllocateRow({ student, vacancies, onAllocate, processing }) {
               className="w-full bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold px-3 py-2.5 pr-8 focus:ring-2 focus:ring-brand-500 outline-none appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               value={selectedVacancy}
               onChange={e => setSelectedVacancy(e.target.value)}
-              disabled={hasDocBlock}
+              disabled={isDocBlocked}
             >
               <option value="">Pick a vacancy...</option>
               {vacancies.map(v => (
                 <option key={v.id} value={v.id}>
-                  {v.org_name} — {v.role_title} ({v.available_slots} slots)
+                  {v.org_name} — {v.role_title}
                 </option>
               ))}
             </select>
@@ -56,7 +308,7 @@ function ManualAllocateRow({ student, vacancies, onAllocate, processing }) {
           </div>
           <Button
             size="sm"
-            disabled={!selectedVacancy || processing || hasDocBlock}
+            disabled={!selectedVacancy || processing || isDocBlocked}
             loading={processing}
             onClick={() => vacancy && onAllocate({
               student_id:   student.student_id,
@@ -71,8 +323,7 @@ function ManualAllocateRow({ student, vacancies, onAllocate, processing }) {
           </Button>
         </div>
       </div>
-      {/* Full warning text for manual queue */}
-      {hasDocBlock && (
+      {isDocBlocked && (
         <div className="mt-3 flex items-start gap-2 p-3 bg-red-50 border border-red-100 rounded-xl">
           <ShieldAlert size={13} className="text-red-500 shrink-0 mt-0.5" />
           <p className="text-xs font-bold text-red-600">{student.doc_warning}</p>
@@ -103,7 +354,7 @@ export default function MatchingEngine() {
   const [suggestions, setSuggestions]               = useState([]);
   const [loading, setLoading]                       = useState(false);
   const [selectedIds, setSelectedIds]               = useState(new Set());
-  const [isBatchConfirmOpen, setIsBatchConfirmOpen] = useState(false);
+  const [isBatchPanelOpen, setIsBatchPanelOpen]     = useState(false);
   const [isBatchRunning, setIsBatchRunning]         = useState(false);
   const [batchLog, setBatchLog]                     = useState([]);
   const [batchDone, setBatchDone]                   = useState(false);
@@ -113,24 +364,16 @@ export default function MatchingEngine() {
   // ── Derived state ──
   const placeableMatches    = suggestions.filter(s => !s.is_unplaceable && s.vacancy_id);
   const unplaceableStudents = suggestions.filter(s => s.is_unplaceable);
+  const selectableMatches   = placeableMatches.filter(s => !s.doc_warning);
+  const manualQueue         = placeableMatches.filter(s => !selectedIds.has(s.student_id));
+  const allSelected         = selectableMatches.length > 0 && selectableMatches.every(s => selectedIds.has(s.student_id));
 
-  // Students with doc warnings cannot be auto-allocated
-  const selectableMatches = placeableMatches.filter(s => !s.doc_warning);
-  const docBlockedMatches = placeableMatches.filter(s => s.doc_warning);
-
-  const manualQueue = placeableMatches.filter(s => !selectedIds.has(s.student_id));
-  const allSelected = selectableMatches.length > 0 && selectableMatches.every(s => selectedIds.has(s.student_id));
+  const selectedMatches = placeableMatches.filter(s => selectedIds.has(s.student_id));
 
   // Unique vacancies for the manual picker
   const availableVacancies = placeableMatches.reduce((acc, s) => {
     if (!acc.find(v => v.id === s.vacancy_id)) {
-      acc.push({
-        id:              s.vacancy_id,
-        org_id:          s.org_id,
-        org_name:        s.org_name,
-        role_title:      s.role,
-        available_slots: "?",
-      });
+      acc.push({ id: s.vacancy_id, org_id: s.org_id, org_name: s.org_name, role_title: s.role, available_slots: "?" });
     }
     return acc;
   }, []);
@@ -154,7 +397,6 @@ export default function MatchingEngine() {
 
   // ── Checkbox helpers ──
   const toggleSelect = (studentId) => {
-    // Never allow selecting a doc-blocked student
     const match = placeableMatches.find(s => s.student_id === studentId);
     if (match?.doc_warning) return;
     setSelectedIds(prev => {
@@ -166,23 +408,18 @@ export default function MatchingEngine() {
 
   const toggleAll = (e) => {
     e.stopPropagation();
-    // Only selects/deselects students WITHOUT doc warnings
-    setSelectedIds(
-      allSelected
-        ? new Set()
-        : new Set(selectableMatches.map(s => s.student_id))
-    );
+    setSelectedIds(allSelected ? new Set() : new Set(selectableMatches.map(s => s.student_id)));
   };
 
-  // ── Core allocation (shared by auto + manual) ──
-  const allocateOne = async (match) => {
-    // 1. Check student doesn't already have an active placement
+  // ── Core allocation ──
+  const allocateOne = async (match, config) => {
+    // 1. Duplicate check
     const { data: existing } = await supabase
       .from("placements").select("id")
       .eq("student_id", match.student_id).eq("status", "active").maybeSingle();
     if (existing) throw new Error(`${match.student_name} already has an active placement.`);
 
-    // 2. Check vacancy still has slots
+    // 2. Slot check
     const { data: vacancy } = await supabase
       .from("organization_vacancies")
       .select("available_slots")
@@ -192,16 +429,14 @@ export default function MatchingEngine() {
       throw new Error(`No slots remaining for "${match.role}" at ${match.org_name}.`);
     }
 
-    // 3. Fetch org profile — doc requirements + supervisor details
+    // 3. Org profile — doc requirements + default supervisor
     const { data: org } = await supabase
       .from("organization_profiles")
       .select("requires_cv, requires_transcript, contact_person, supervisor_email")
       .eq("id", match.org_id)
       .single();
 
-    // 4. Hard enforce org-specific document requirements.
-    //    Blocked if org requires a doc the student doesn't have.
-    //    If org toggled off the requirement, missing that doc is fine.
+    // 4. Doc enforcement
     if (org) {
       const { data: student } = await supabase
         .from("student_profiles")
@@ -212,41 +447,56 @@ export default function MatchingEngine() {
       const missingDocs = [];
       if (org.requires_cv         && !student?.cv_url?.trim())         missingDocs.push("CV");
       if (org.requires_transcript && !student?.transcript_url?.trim()) missingDocs.push("Transcript");
-
       if (missingDocs.length > 0) {
         throw new Error(
-          `Cannot allocate ${match.student_name} — ${match.org_name} requires: ${missingDocs.join(" & ")}. ` +
-          `Student has not uploaded ${missingDocs.length === 1 ? "this document" : "these documents"}.`
+          `Cannot allocate ${match.student_name} — ${match.org_name} requires: ${missingDocs.join(" & ")}.`
         );
       }
     }
 
-    // 5. Create placement with industrial supervisor auto-filled from org
+    // 5. Resolve dates and supervisors
+    const year       = new Date().getFullYear();
+    const startDate  = config?.startDate     || `${year}-06-01`;
+    const endDate    = config?.endDate       || `${year}-07-27`;
+    const durationWeeks = config?.durationWeeks || 8;
+
+    // Industrial supervisor: use coordinator's selection if provided,
+    // otherwise fall back to org's contact_person
+    const industrialName  = config?.industrialSupervisorName  || org?.contact_person   || null;
+    const industrialEmail = config?.industrialSupervisorEmail || org?.supervisor_email || null;
+
+    // University supervisor from batch config
+    const universityName  = config?.universitySupervisorName  || null;
+    const universityEmail = config?.universitySupervisorEmail || null;
+
+    // 6. Create placement
     const { error: pError } = await supabase.from("placements").insert({
       student_id:                  match.student_id,
       organization_id:             match.org_id,
       position_title:              match.role,
       status:                      "active",
-      start_date:                  new Date().toISOString().split("T")[0],
-      end_date:                    new Date(Date.now() + 8 * 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-      duration_weeks:              8,
-      industrial_supervisor_name:  org?.contact_person   || null,
-      industrial_supervisor_email: org?.supervisor_email || null,
+      start_date:                  startDate,
+      end_date:                    endDate,
+      duration_weeks:              durationWeeks,
+      industrial_supervisor_name:  industrialName,
+      industrial_supervisor_email: industrialEmail,
+      university_supervisor_name:  universityName,
+      university_supervisor_email: universityEmail,
     });
     if (pError) throw pError;
 
-    // 6. Update student status
+    // 7. Update student status
     const { error: sError } = await supabase.from("student_profiles")
       .update({ status: "matched" }).eq("id", match.student_id);
     if (sError) throw sError;
 
-    // 7. Decrement slots
+    // 8. Decrement slots
     await supabase.rpc("decrement_vacancy_slots", { vacancy_id: match.vacancy_id });
   };
 
-  // ── Auto-allocate batch ──
-  const runBatchAllocation = async () => {
-    setIsBatchConfirmOpen(false);
+  // ── Batch allocation ──
+  const runBatchAllocation = async (config) => {
+    setIsBatchPanelOpen(false);
     setIsBatchRunning(true);
     setBatchLog([]);
     setBatchDone(false);
@@ -259,7 +509,7 @@ export default function MatchingEngine() {
       log.push({ id: match.student_id, status: "running", message: `Allocating ${match.student_name} → ${match.org_name}...` });
       setBatchLog([...log]);
       try {
-        await allocateOne(match);
+        await allocateOne(match, config);
         log[log.length - 1] = { id: match.student_id, status: "success", message: `${match.student_name} → ${match.org_name} as ${match.role}` };
         successIds.add(match.student_id);
       } catch (err) {
@@ -274,11 +524,11 @@ export default function MatchingEngine() {
     setBatchDone(true);
   };
 
-  // ── Manual single allocation ──
+  // ── Manual single allocation — uses defaults ──
   const handleManualAllocate = async (match) => {
     setProcessingId(match.student_id);
     try {
-      await allocateOne(match);
+      await allocateOne(match, null);
       setSuggestions(prev => prev.filter(s => s.student_id !== match.student_id));
       setResultModal({ open: true, success: true, message: `${match.student_name} allocated to ${match.org_name} as ${match.role}.` });
     } catch (err) {
@@ -294,6 +544,23 @@ export default function MatchingEngine() {
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-20">
 
+      {/* ── Batch Panel ── */}
+      {isBatchPanelOpen && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 z-[99] bg-brand-950/40 backdrop-blur-sm"
+            onClick={() => setIsBatchPanelOpen(false)}
+          />
+          <BatchPanel
+            selectedMatches={selectedMatches}
+            onClose={() => setIsBatchPanelOpen(false)}
+            onAllocate={runBatchAllocation}
+            isRunning={isBatchRunning}
+          />
+        </>
+      )}
+
       {/* ── Header ── */}
       <div className="bg-brand-900 rounded-3xl p-8 text-white shadow-xl relative overflow-hidden">
         <Brain className="absolute right-10 bottom-[-20px] w-48 h-48 text-brand-800 opacity-50" />
@@ -301,7 +568,7 @@ export default function MatchingEngine() {
           <div>
             <h2 className="font-display text-3xl font-bold text-white">Heuristic Matching Engine</h2>
             <p className="text-brand-200 text-sm max-w-lg mt-1 leading-relaxed">
-              Run the engine, check students for auto-allocation, then handle the rest manually.
+              Run the engine, select students for batch allocation, set dates and supervisors — then confirm.
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
@@ -311,11 +578,12 @@ export default function MatchingEngine() {
             </Button>
             {selectedIds.size > 0 && !isBatchRunning && (
               <button
-                onClick={() => setIsBatchConfirmOpen(true)}
+                onClick={() => setIsBatchPanelOpen(true)}
                 className="flex items-center gap-2 px-5 py-2.5 bg-green-500 hover:bg-green-400 text-white rounded-xl font-black text-sm transition-all shadow-lg cursor-pointer"
               >
-                <Play size={15} fill="currentColor" />
-                Auto-Allocate {selectedIds.size} Student{selectedIds.size !== 1 ? "s" : ""}
+                <Calendar size={15} />
+                Allocate {selectedIds.size} Student{selectedIds.size !== 1 ? "s" : ""}
+                <ChevronRight size={14} />
               </button>
             )}
           </div>
@@ -353,7 +621,7 @@ export default function MatchingEngine() {
         </div>
       )}
 
-      {/* ── Suggestions with checkboxes ── */}
+      {/* ── Suggestions ── */}
       {placeableMatches.length > 0 && (
         <div className="space-y-4">
           <div className="flex items-center justify-between px-1">
@@ -362,22 +630,19 @@ export default function MatchingEngine() {
                 Engine Suggestions — {placeableMatches.length} match{placeableMatches.length !== 1 ? "es" : ""}
               </h3>
               <p className="text-[10px] text-gray-400 mt-0.5">
-                Check students to auto-allocate. Students with missing docs cannot be selected.
+                Select students then click Allocate to set dates and supervisors for the batch.
               </p>
             </div>
             <button
               onClick={toggleAll}
               className="flex items-center gap-1.5 text-xs font-black text-brand-600 hover:text-brand-800 transition-colors cursor-pointer shrink-0"
             >
-              {allSelected
-                ? <><CheckSquare size={13} /> Deselect All</>
-                : <><Square size={13} /> Select All</>
-              }
+              {allSelected ? <><CheckSquare size={13} /> Deselect All</> : <><Square size={13} /> Select All</>}
             </button>
           </div>
 
-          {placeableMatches.map((match) => {
-            const isChecked   = selectedIds.has(match.student_id);
+          {placeableMatches.map(match => {
+            const isChecked    = selectedIds.has(match.student_id);
             const isDocBlocked = Boolean(match.doc_warning);
 
             return (
@@ -393,8 +658,6 @@ export default function MatchingEngine() {
                 }`}
               >
                 <div className="flex items-start gap-4">
-
-                  {/* Checkbox — disabled and visually blocked if doc warning */}
                   <div
                     className={`mt-1 shrink-0 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
                       isDocBlocked
@@ -409,7 +672,6 @@ export default function MatchingEngine() {
                     {!isDocBlocked && isChecked && <CheckCircle2 size={11} className="text-white" />}
                   </div>
 
-                  {/* Score ring */}
                   <div className="relative shrink-0">
                     <div className={`w-14 h-14 rounded-2xl flex items-center justify-center font-black text-base ${
                       isDocBlocked ? "bg-red-50 text-red-400" : "bg-brand-50 text-brand-600"
@@ -426,21 +688,16 @@ export default function MatchingEngine() {
                     </svg>
                   </div>
 
-                  {/* Details */}
                   <div className="flex-1 min-w-0 space-y-1.5">
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                       <span className="font-bold text-brand-900 text-base leading-tight">{match.student_name}</span>
                       <span className="text-gray-300">→</span>
                       <span className="font-bold text-brand-600 text-base leading-tight">{match.org_name}</span>
                       {isChecked && !isDocBlocked && (
-                        <span className="text-[9px] font-black text-brand-600 uppercase tracking-widest bg-brand-100 px-2 py-0.5 rounded-lg">
-                          Auto
-                        </span>
+                        <span className="text-[9px] font-black text-brand-600 uppercase tracking-widest bg-brand-100 px-2 py-0.5 rounded-lg">Selected</span>
                       )}
                       {isDocBlocked && (
-                        <span className="text-[9px] font-black text-red-600 uppercase tracking-widest bg-red-100 px-2 py-0.5 rounded-lg">
-                          Blocked
-                        </span>
+                        <span className="text-[9px] font-black text-red-600 uppercase tracking-widest bg-red-100 px-2 py-0.5 rounded-lg">Blocked</span>
                       )}
                     </div>
                     <div className="flex flex-wrap gap-3 text-xs text-gray-500 font-medium">
@@ -466,8 +723,6 @@ export default function MatchingEngine() {
                         ))}
                       </div>
                     )}
-
-                    {/* Doc warning — full red banner, not just amber text */}
                     {isDocBlocked && (
                       <div className="flex items-start gap-2 mt-2 p-3 bg-red-50 border border-red-100 rounded-xl">
                         <ShieldAlert size={13} className="text-red-500 shrink-0 mt-0.5" />
@@ -494,12 +749,10 @@ export default function MatchingEngine() {
               <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-400">
                 Manual Queue — {manualQueue.length} student{manualQueue.length !== 1 ? "s" : ""}
               </h3>
-              <p className="text-[10px] text-gray-400 mt-0.5">
-                Pick a vacancy and allocate directly.
-              </p>
+              <p className="text-[10px] text-gray-400 mt-0.5">Pick a vacancy and allocate directly.</p>
             </div>
           </div>
-          {manualQueue.map((student) => (
+          {manualQueue.map(student => (
             <ManualAllocateRow
               key={student.student_id}
               student={student}
@@ -517,7 +770,7 @@ export default function MatchingEngine() {
           <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-400 px-1">
             Needs Attention — {unplaceableStudents.length} student{unplaceableStudents.length !== 1 ? "s" : ""}
           </h3>
-          {unplaceableStudents.map((s) => (
+          {unplaceableStudents.map(s => (
             <div key={s.student_id} className="bg-white border-2 border-dashed border-red-100 p-4 rounded-2xl flex items-center gap-4">
               <div className="p-2.5 bg-red-50 text-red-400 rounded-xl shrink-0">
                 <AlertTriangle size={16} />
@@ -534,17 +787,6 @@ export default function MatchingEngine() {
           ))}
         </div>
       )}
-
-      {/* ── Batch confirm ── */}
-      <ConfirmModal
-        isOpen={isBatchConfirmOpen}
-        onClose={() => setIsBatchConfirmOpen(false)}
-        onConfirm={runBatchAllocation}
-        title={`Auto-Allocate ${selectedIds.size} Student${selectedIds.size !== 1 ? "s" : ""}?`}
-        message={`The system will allocate ${selectedIds.size} selected student${selectedIds.size !== 1 ? "s" : ""} to their top-matched vacancies. Active placements will be created and statuses updated. This cannot be undone in bulk.`}
-        confirmText="Run Auto-Allocation"
-        type="warning"
-      />
 
       {/* ── Result modal ── */}
       <ConfirmModal
