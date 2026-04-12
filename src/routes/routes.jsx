@@ -63,7 +63,7 @@ export const router = createBrowserRouter([
           { path: "dashboard", element: <StudentDashboard /> },
           { path: "profile", element: <StudentProfile /> },
           { path: "preferences", element: <StudentPreferences /> },
-          { path: "logbook", element: <LogbookManager /> },
+          //{ path: "logbook", element: <LogbookManager /> },
         ],
       },
 
