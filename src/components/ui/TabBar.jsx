@@ -50,7 +50,8 @@ export default function TabBar({
       ${fullWidth ? "w-full" : "w-fit"} ${className}`}>
       {tabs.map((tab) => {
         const isActive   = tab.key === activeKey;
-        const isDisabled = !!tab.disabled;
+        const isLocked   = !!tab.locked;   // visually dimmed, still clickable
+        const isDisabled = !!tab.disabled; // truly non-interactive
         const hasDot     = tab.dot !== undefined;
         const hasCount   = tab.count !== undefined;
 
@@ -71,6 +72,8 @@ export default function TabBar({
                 ? "bg-white shadow-sm text-brand-900"
                 : isDisabled
                 ? "text-gray-300 cursor-not-allowed"
+                : isLocked
+                ? "text-gray-400 hover:text-gray-600 hover:bg-white/40 opacity-60"
                 : "text-gray-500 hover:text-gray-800 hover:bg-white/60"
               }
             `}

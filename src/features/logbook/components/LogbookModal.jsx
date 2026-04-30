@@ -149,24 +149,24 @@ export default function LogbookModal({ week, onClose, onStatusUpdate }) {
   //   "pre-start"  — log_date is before the placement start date
   //   null         — day is writable (subject to isLocked)
   const getDayLockReason = (day) => {
-    // "future" — log_date is strictly after today (tomorrow or later)
-    // Students CAN fill in any past day they missed — yesterday, last week, etc.
-    // "pre-start" — log_date is before the placement start date
-    // null — day is writable
+    // Parse all dates as LOCAL midnight to avoid UTC offset treating
+    // tomorrow's date as today (or today's as yesterday) in UTC+2.
+    const parseLocal = (str) => {
+      const [y, m, d] = String(str).split("T")[0].split("-").map(Number);
+      return new Date(y, m - 1, d); // local midnight, no UTC shift
+    };
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0); // start of today
+    const today   = new Date();
+    today.setHours(0, 0, 0, 0);
 
-    const logDate = new Date(day.log_date);
-    logDate.setHours(0, 0, 0, 0);
+    const logDate = parseLocal(day.log_date);
 
-    // Strictly in the future (tomorrow or later) — cannot log ahead
+    // Strictly tomorrow or later — student cannot log ahead
     if (logDate > today) return "future";
 
-    // Before placement start — attachment hadn't begun
+    // Before placement commencement — attachment hadn't begun yet
     if (week.start_date) {
-      const startDate = new Date(week.start_date);
-      startDate.setHours(0, 0, 0, 0);
+      const startDate = parseLocal(week.start_date);
       if (logDate < startDate) return "pre-start";
     }
 
@@ -190,14 +190,16 @@ export default function LogbookModal({ week, onClose, onStatusUpdate }) {
 
   const tabItems = days.map((d, i) => {
     const lockReason = getDayLockReason(d);
-    // Derive label from actual day_of_week — correct for weeks starting mid-week
     const shortLabel = d.day_of_week?.slice(0, 3) || `D${i + 1}`;
     return {
       key:      String(i),
       label:    shortLabel,
       sublabel: fmt(d.log_date, { day: "numeric", month: "short" }),
       dot:      !lockReason && dayFilled(d),
-      disabled: !!lockReason && !isLocked,
+      // Never set disabled=true on tabs — all days must be clickable
+      // so students can see why a day is locked. Visual dimming is
+      // handled inside DailyEntryRow via dayLockReason.
+      locked:   !!lockReason, // passed as visual hint only, not HTML disabled
     };
   });
 
