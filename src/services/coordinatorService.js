@@ -1,9 +1,9 @@
 import { supabase } from "../lib/supabaseClient";
 
 export const coordinatorService = {
-  /**
-   * Fetches high-level overview stats using parallel queries
-   */
+
+  // ─── DASHBOARD ───────────────────────────────────────────────────────────────
+
   getDashboardStats: async () => {
     const [students, orgs, searching, placements] = await Promise.all([
       supabase.from("student_profiles").select("id", { count: "exact", head: true }),
@@ -12,22 +12,21 @@ export const coordinatorService = {
       supabase.from("placements").select("id", { count: "exact", head: true }).eq("status", "active"),
     ]);
 
-    if (students.error) throw students.error;
-    if (orgs.error) throw orgs.error;
+    if (students.error)  throw students.error;
+    if (orgs.error)      throw orgs.error;
     if (searching.error) throw searching.error;
     if (placements.error) throw placements.error;
 
     return {
-      totalStudents: students.count || 0,
-      totalOrgs: orgs.count || 0,
+      totalStudents: students.count  || 0,
+      totalOrgs:     orgs.count      || 0,
       searchingCount: searching.count || 0,
-      placedCount: placements.count || 0,
+      placedCount:   placements.count || 0,
     };
   },
 
-  /**
-   * Fetches full student registry with preferences joined
-   */
+  // ─── STUDENT REGISTRY ────────────────────────────────────────────────────────
+
   getStudentRegistryDeep: async () => {
     const { data, error } = await supabase
       .from("student_profiles")
@@ -40,12 +39,110 @@ export const coordinatorService = {
           preferred_locations
         )
       `)
-      .order("gpa", { ascending: false, nullsFirst: false })
+      .order("gpa",       { ascending: false, nullsFirst: false })
       .order("full_name", { ascending: true });
 
     if (error) throw error;
     return data;
   },
+
+  /**
+   * Fetch the active placement for a student (used in StudentAuditModal).
+   * Returns null if no active placement exists.
+   */
+  getStudentPlacement: async (studentId) => {
+    const { data, error } = await supabase
+      .from("placements")
+      .select(`
+        id,
+        start_date,
+        end_date,
+        duration_weeks,
+        position_title,
+        industrial_supervisor_name,
+        industrial_supervisor_email,
+        university_supervisor_name,
+        university_supervisor_email,
+        organization_profiles (
+          org_name,
+          contact_person,
+          supervisor_email
+        )
+      `)
+      .eq("student_id", studentId)
+      .eq("status", "active")
+      .maybeSingle();
+
+    // PGRST116 = no rows — not placed yet
+    if (error && error.code !== "PGRST116") throw error;
+    return data ?? null;
+  },
+
+  /**
+   * Update attachment start/end dates and recalculate duration_weeks.
+   * Called from StudentAuditModal "Attachment Dates" section.
+   *
+   * Guards:
+   *  - end_date must be after start_date
+   *  - duration_weeks calculated from the diff (min 1 week)
+   */
+  updatePlacementDates: async (placementId, startDate, endDate) => {
+    if (!startDate || !endDate) {
+      throw new Error("Both start and end dates are required.");
+    }
+
+    const start = new Date(startDate);
+    const end   = new Date(endDate);
+
+    if (end <= start) {
+      throw new Error("End date must be after start date.");
+    }
+
+    const durationWeeks = Math.max(
+      Math.round((end - start) / (1000 * 60 * 60 * 24 * 7)),
+      1
+    );
+
+    const { error } = await supabase
+      .from("placements")
+      .update({
+        start_date:     startDate,
+        end_date:       endDate,
+        duration_weeks: durationWeeks,
+      })
+      .eq("id", placementId);
+
+    if (error) throw error;
+    return { durationWeeks };
+  },
+
+  /**
+   * Update industrial and university supervisor details on a placement.
+   * Called from StudentAuditModal "Supervisor Assignment" section.
+   */
+  updatePlacementSupervisors: async (placementId, supervisorData) => {
+    const {
+      industrial_supervisor_name,
+      industrial_supervisor_email,
+      university_supervisor_name,
+      university_supervisor_email,
+    } = supervisorData;
+
+    const { error } = await supabase
+      .from("placements")
+      .update({
+        industrial_supervisor_name,
+        industrial_supervisor_email,
+        university_supervisor_name,
+        university_supervisor_email,
+      })
+      .eq("id", placementId);
+
+    if (error) throw error;
+    return true;
+  },
+
+  // ─── STUDENT STATUS ──────────────────────────────────────────────────────────
 
   /**
    * Updates a student's attachment status with full lifecycle handling:
@@ -92,7 +189,6 @@ export const coordinatorService = {
         .eq("student_id", studentId)
         .eq("status", "active");
 
-      // Non-fatal — student may not have a placement (manual status change)
       if (placementError) {
         console.warn("Could not mark placement as completed:", placementError.message);
       }
@@ -108,7 +204,6 @@ export const coordinatorService = {
 
     if (error) throw error;
 
-    // Verify the update actually persisted (catches silent RLS failures)
     if (data.status !== sanitizedStatus) {
       throw new Error(
         `Status update was blocked by the database. Expected "${sanitizedStatus}" but got "${data.status}". Check coordinator permissions.`
@@ -118,9 +213,8 @@ export const coordinatorService = {
     return data;
   },
 
-  /**
-   * Fetches the complete list of partner organizations with their vacancies
-   */
+  // ─── PARTNER REGISTRY ────────────────────────────────────────────────────────
+
   getPartnerRegistry: async () => {
     const { data, error } = await supabase
       .from("organization_profiles")
@@ -143,16 +237,10 @@ export const coordinatorService = {
     return data;
   },
 
-  /**
-   * Fetches full details for a specific organization
-   */
   getPartnerDetails: async (orgId) => {
     const { data, error } = await supabase
       .from("organization_profiles")
-      .select(`
-        *,
-        organization_vacancies (*)
-      `)
+      .select(`*, organization_vacancies (*)`)
       .eq("id", orgId)
       .single();
 
