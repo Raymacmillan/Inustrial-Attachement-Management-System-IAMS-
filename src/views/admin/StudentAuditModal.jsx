@@ -8,7 +8,6 @@ import {
 import Button from "../../components/ui/Button";
 import Badge from "../../components/ui/Badge";
 import { coordinatorService } from "../../services/coordinatorService";
-import { supabase } from "../../lib/supabaseClient";
 
 // ── Section accordion ─────────────────────────────────────────────────
 function Section({ title, icon: Icon, defaultOpen = false, children }) {
@@ -83,26 +82,26 @@ export default function StudentAuditModal({ isOpen, onClose, student, onUpdate }
   const navigate = useNavigate();
 
   // Status
-  const [status, setStatus]       = useState(student?.status || "pending");
-  const [saving, setSaving]       = useState(false);
-  const [saved, setSaved]         = useState(false);
+  const [status,    setStatus]    = useState(student?.status || "pending");
+  const [saving,    setSaving]    = useState(false);
+  const [saved,     setSaved]     = useState(false);
   const [saveError, setSaveError] = useState("");
 
   // Placement + dates
-  const [placement, setPlacement]           = useState(null);
-  const [dateForm, setDateForm]             = useState({ start_date: "", end_date: "" });
-  const [savingDates, setSavingDates]       = useState(false);
-  const [datesSaved, setDatesSaved]         = useState(false);
+  const [placement,    setPlacement]    = useState(null);
+  const [dateForm,     setDateForm]     = useState({ start_date: "", end_date: "" });
+  const [savingDates,  setSavingDates]  = useState(false);
+  const [datesSaved,   setDatesSaved]   = useState(false);
 
   // Supervisors
-  const [supervisorForm, setSupervisorForm] = useState({
+  const [supervisorForm,    setSupervisorForm]    = useState({
     industrial_supervisor_name:  "",
     industrial_supervisor_email: "",
     university_supervisor_name:  "",
     university_supervisor_email: "",
   });
   const [savingSupervisors, setSavingSupervisors] = useState(false);
-  const [supervisorSaved, setSupervisorSaved]     = useState(false);
+  const [supervisorSaved,   setSupervisorSaved]   = useState(false);
 
   useEffect(() => {
     if (!student) return;
@@ -113,53 +112,32 @@ export default function StudentAuditModal({ isOpen, onClose, student, onUpdate }
     setSupervisorSaved(false);
     setPlacement(null);
 
-    // Fetch active placement for matched/allocated students
+    // Fetch active placement via service (no raw Supabase in component)
     if (student.status === "matched" || student.status === "allocated") {
-      supabase
-        .from("placements")
-        .select(`
-          id,
-          start_date,
-          end_date,
-          duration_weeks,
-          position_title,
-          industrial_supervisor_name,
-          industrial_supervisor_email,
-          university_supervisor_name,
-          university_supervisor_email,
-          organization_profiles (
-            org_name,
-            contact_person,
-            supervisor_email
-          )
-        `)
-        .eq("student_id", student.id)
-        .eq("status", "active")
-        .maybeSingle()
-        .then(({ data }) => {
-          if (!data) return;
-          setPlacement(data);
-          setDateForm({
-            start_date: data.start_date || "",
-            end_date:   data.end_date   || "",
-          });
-          const org = data.organization_profiles || {};
-          setSupervisorForm({
-            industrial_supervisor_name:  data.industrial_supervisor_name  || org.contact_person  || "",
-            industrial_supervisor_email: data.industrial_supervisor_email || org.supervisor_email || "",
-            university_supervisor_name:  data.university_supervisor_name  || "",
-            university_supervisor_email: data.university_supervisor_email || "",
-          });
+      coordinatorService.getStudentPlacement(student.id).then((data) => {
+        if (!data) return;
+        setPlacement(data);
+        setDateForm({
+          start_date: data.start_date || "",
+          end_date:   data.end_date   || "",
         });
+        const org = data.organization_profiles || {};
+        setSupervisorForm({
+          industrial_supervisor_name:  data.industrial_supervisor_name  || org.contact_person  || "",
+          industrial_supervisor_email: data.industrial_supervisor_email || org.supervisor_email || "",
+          university_supervisor_name:  data.university_supervisor_name  || "",
+          university_supervisor_email: data.university_supervisor_email || "",
+        });
+      }).catch(err => setSaveError(err.message));
     }
   }, [student]);
 
   if (!student || !isOpen) return null;
 
-  const prefs = student.student_preferences || {};
+  const prefs    = student.student_preferences || {};
   const isPlaced = student.status === "matched" || student.status === "allocated";
 
-  // ── Calculate duration from selected dates ──
+  // ── Duration label ──
   const calcWeeks = () => {
     if (!dateForm.start_date || !dateForm.end_date) return null;
     const diff = new Date(dateForm.end_date) - new Date(dateForm.start_date);
@@ -187,26 +165,17 @@ export default function StudentAuditModal({ isOpen, onClose, student, onUpdate }
     }
   };
 
-  // ── Save placement dates ──
+  // ── Save placement dates (via service) ──
   const handleDatesSave = async () => {
     if (!placement?.id) return;
-    if (!dateForm.start_date || !dateForm.end_date) return;
-    if (new Date(dateForm.end_date) <= new Date(dateForm.start_date)) {
-      setSaveError("End date must be after start date.");
-      return;
-    }
     setSavingDates(true);
+    setSaveError("");
     try {
-      const weeks = calcWeeks();
-      const { error } = await supabase
-        .from("placements")
-        .update({
-          start_date:     dateForm.start_date,
-          end_date:       dateForm.end_date,
-          duration_weeks: weeks,
-        })
-        .eq("id", placement.id);
-      if (error) throw error;
+      await coordinatorService.updatePlacementDates(
+        placement.id,
+        dateForm.start_date,
+        dateForm.end_date
+      );
       setDatesSaved(true);
       setTimeout(() => setDatesSaved(false), 2500);
     } catch (err) {
@@ -216,16 +185,13 @@ export default function StudentAuditModal({ isOpen, onClose, student, onUpdate }
     }
   };
 
-  // ── Save supervisors ──
+  // ── Save supervisors (via service) ──
   const handleSupervisorSave = async () => {
     if (!placement?.id) return;
     setSavingSupervisors(true);
+    setSaveError("");
     try {
-      const { error } = await supabase
-        .from("placements")
-        .update(supervisorForm)
-        .eq("id", placement.id);
-      if (error) throw error;
+      await coordinatorService.updatePlacementSupervisors(placement.id, supervisorForm);
       setSupervisorSaved(true);
       setTimeout(() => setSupervisorSaved(false), 2500);
     } catch (err) {
@@ -299,8 +265,8 @@ export default function StudentAuditModal({ isOpen, onClose, student, onUpdate }
 
           <Section title="Documents" icon={FileText} defaultOpen={true}>
             <div className="space-y-3">
-              <DocCard label="Curriculum Vitae" url={student.cv_url} />
-              <DocCard label="Academic Transcript" url={student.transcript_url} />
+              <DocCard label="Curriculum Vitae"     url={student.cv_url} />
+              <DocCard label="Academic Transcript"  url={student.transcript_url} />
             </div>
           </Section>
 
@@ -351,9 +317,11 @@ export default function StudentAuditModal({ isOpen, onClose, student, onUpdate }
                   <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">
                     Placement at {placement.organization_profiles?.org_name}
                   </p>
-                  <span className="text-[9px] font-black text-brand-500 uppercase tracking-widest bg-brand-50 px-2 py-0.5 rounded-lg">
-                    {placement.position_title}
-                  </span>
+                  {placement.position_title && (
+                    <span className="text-[9px] font-black text-brand-500 uppercase tracking-widest bg-brand-50 px-2 py-0.5 rounded-lg">
+                      {placement.position_title}
+                    </span>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -412,8 +380,6 @@ export default function StudentAuditModal({ isOpen, onClose, student, onUpdate }
           {placement && (
             <Section title="Supervisor Assignment" icon={UserCheck} defaultOpen={true}>
               <div className="space-y-5">
-
-                {/* Industrial supervisor — auto-filled from org */}
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">
@@ -425,16 +391,13 @@ export default function StudentAuditModal({ isOpen, onClose, student, onUpdate }
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <SupervisorInput
-                      label="Name"
-                      icon={User}
+                      label="Name" icon={User}
                       placeholder="e.g. Mr John Doe"
                       value={supervisorForm.industrial_supervisor_name}
                       onChange={e => setSupervisorForm(f => ({ ...f, industrial_supervisor_name: e.target.value }))}
                     />
                     <SupervisorInput
-                      label="Email"
-                      icon={Mail}
-                      type="email"
+                      label="Email" icon={Mail} type="email"
                       placeholder="supervisor@company.com"
                       value={supervisorForm.industrial_supervisor_email}
                       onChange={e => setSupervisorForm(f => ({ ...f, industrial_supervisor_email: e.target.value }))}
@@ -442,23 +405,19 @@ export default function StudentAuditModal({ isOpen, onClose, student, onUpdate }
                   </div>
                 </div>
 
-                {/* University supervisor */}
                 <div className="space-y-3 pt-3 border-t border-gray-100">
                   <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">
                     University Supervisor (UB Department)
                   </p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <SupervisorInput
-                      label="Name"
-                      icon={User}
+                      label="Name" icon={User}
                       placeholder="e.g. Dr Jane Smith"
                       value={supervisorForm.university_supervisor_name}
                       onChange={e => setSupervisorForm(f => ({ ...f, university_supervisor_name: e.target.value }))}
                     />
                     <SupervisorInput
-                      label="Email"
-                      icon={Mail}
-                      type="email"
+                      label="Email" icon={Mail} type="email"
                       placeholder="lecturer@ub.ac.bw"
                       value={supervisorForm.university_supervisor_email}
                       onChange={e => setSupervisorForm(f => ({ ...f, university_supervisor_email: e.target.value }))}
