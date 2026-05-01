@@ -127,7 +127,7 @@ export const supervisorService = {
     // Find the supervisor roster row linked to this user
     const { data: supervisorRow, error: supError } = await supabase
       .from("organization_supervisors")
-      .select("id, name, title, org_id, organization_profiles(org_name)")
+      .select("id, full_name, role_title, org_id, organization_profiles(org_name)")
       .eq("user_id", userId)
       .maybeSingle();
 
