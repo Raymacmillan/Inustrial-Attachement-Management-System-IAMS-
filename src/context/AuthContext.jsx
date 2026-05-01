@@ -2,22 +2,45 @@ import { useContext, useState, createContext, useEffect, useMemo } from "react";
 import { supabase } from "../lib/supabaseClient";
 
 const AuthContext = createContext({
-  session: null,
-  userRole: null,
-  loading: true,
-  user: null,
-  signInUser: async () => {},
-  signUpNewUser: async () => {},
+  session:        null,
+  userRole:       null,
+  loading:        true,
+  user:           null,
+  signInUser:     async () => {},
+  signUpNewUser:  async () => {},
   signInWithGoogle: async () => {},
-  signOut: async () => {},
-  resetPassword: async () => {},
+  signOut:        async () => {},
+  resetPassword:  async () => {},
   updatePassword: async () => {},
 });
 
 export const AuthContextProvider = ({ children }) => {
-  const [session, setSession] = useState(null);
+  const [session,  setSession]  = useState(null);
   const [userRole, setUserRole] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading,  setLoading]  = useState(true);
+
+  // ── Role resolution ────────────────────────────────────────────────────────
+  // Source of truth is the user_roles table, NOT user_metadata.role.
+  // Coordinator and supervisor accounts are created without going through the
+  // app's signup form, so their user_metadata.role is empty. The DB row is
+  // always correct regardless of how the account was created.
+
+  const fetchRole = async (userId) => {
+    const { data, error } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", userId)
+      .single();
+
+    if (error || !data) {
+      // Fall back to user_metadata for accounts created via signUpNewUser
+      // (e.g. students/orgs who registered through the app before this fix)
+      return null;
+    }
+    return data.role;
+  };
+
+  // ── Validation helpers ─────────────────────────────────────────────────────
 
   const isPasswordStrong = (password) => {
     const regex = /^(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+={}\[\]:;"'<>,.?/-]).{8,}$/;
@@ -27,19 +50,14 @@ export const AuthContextProvider = ({ children }) => {
   const isValidStudentId = (id) => /^\d{9}$/.test(id);
 
   // ── signUpNewUser ──────────────────────────────────────────────────────────
-  // Every code path MUST return { success, error } or { success, data }.
-  
-  const signUpNewUser = async (email, password, metadata, restrictToUB = false) => {
 
-    // 1. UB email restriction for students
+  const signUpNewUser = async (email, password, metadata, restrictToUB = false) => {
     if (restrictToUB && !email.endsWith("@ub.ac.bw")) {
       return { success: false, error: "Please use your official @ub.ac.bw email." };
     }
 
-    // 2. Student-specific validation
     if (metadata.role === "student") {
       const idFromEmail = email.split("@")[0];
-
       if (!isValidStudentId(metadata.student_id)) {
         return { success: false, error: "Student ID must be exactly 9 digits." };
       }
@@ -48,12 +66,10 @@ export const AuthContextProvider = ({ children }) => {
       }
     }
 
-    // 3. Password strength
     if (!isPasswordStrong(password)) {
       return { success: false, error: "Password too weak. Use uppercase, numbers, and symbols." };
     }
 
-    // 4. Call Supabase Auth
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -69,12 +85,8 @@ export const AuthContextProvider = ({ children }) => {
       },
     });
 
-    // 5. Handle Supabase error
     if (error) return { success: false, error: error.message };
 
-    // 6. Detect repeated signup — Supabase returns identities: [] when the
-    //    email already exists (email enumeration protection).
-    //    Without this check the frontend shows a fake verification screen.
     if (data?.user?.identities?.length === 0) {
       return {
         success: false,
@@ -82,9 +94,10 @@ export const AuthContextProvider = ({ children }) => {
       };
     }
 
-    // 7. Success
     return { success: true, data };
   };
+
+  // ── Auth actions ───────────────────────────────────────────────────────────
 
   const signInUser = async (email, password) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
@@ -120,23 +133,58 @@ export const AuthContextProvider = ({ children }) => {
     setSession(null);
   };
 
+  // ── Session initialisation ─────────────────────────────────────────────────
+
   useEffect(() => {
+    let mounted = true;
+
+    const resolveRole = async (user) => {
+      if (!user) return null;
+      const dbRole = await fetchRole(user.id);
+      return dbRole ?? user.user_metadata?.role ?? null;
+    };
+
+    // ── Initial session load ─────────────────────────────────────────
     const initializeAuth = async () => {
       const { data: { session } } = await supabase.auth.getSession();
+      if (!mounted) return;
+
       setSession(session);
-      if (session?.user) setUserRole(session.user.user_metadata.role);
-      setLoading(false);
+      if (session?.user) {
+        const role = await resolveRole(session.user);
+        if (mounted) setUserRole(role);
+      }
+      if (mounted) setLoading(false);
     };
 
     initializeAuth();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setUserRole(session?.user?.user_metadata?.role || null);
-      setLoading(false);
-    });
+    // ── Auth state changes (login / logout / token refresh) ──────────
+    // Do NOT do async work that could trigger re-renders in here beyond
+    // the bare minimum — just sync the session and kick off role fetch.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        if (!mounted) return;
 
-    return () => subscription.unsubscribe();
+        setSession(session);
+
+        if (!session?.user) {
+          setUserRole(null);
+          setLoading(false);
+          return;
+        }
+
+        // Fire-and-forget role fetch — doesn't block the listener
+        resolveRole(session.user).then((role) => {
+          if (mounted) setUserRole(role);
+        });
+      }
+    );
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const value = useMemo(() => ({
