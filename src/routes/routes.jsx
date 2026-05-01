@@ -34,6 +34,10 @@ import MatchingEngine from "../views/admin/MatchEngine";
 import PartnerRegistry from "../views/admin/PartnerRegistry";
 import StudentRegistry from "../views/admin/StudentRegistry";
 
+import RegisterSupervisor from "../views/auth/RegisterSupervisor";
+import IndustrialSupervisorPortal from "../views/supervisor/IndustrialSupervisorPortal";
+import UniversitySupervisorPortal from "../views/supervisor/UniversitySupervisorPortal";
+
 export const router = createBrowserRouter([
   {
     path: "/",
@@ -102,6 +106,42 @@ export const router = createBrowserRouter([
           { path: "students", element: <StudentRegistry /> },
         ],
       },
+      // ── Supervisor Registration (public)
+      { path: "register/supervisor", element: <RegisterSupervisor /> },
+
+      // ── Industrial Supervisor
+      {
+        path: "supervisor/industrial",
+        element: (
+          <ProtectedRoute allowedRoles={["industrial_supervisor"]}>
+            <DashboardLayout />
+          </ProtectedRoute>
+        ),
+        children: [
+          { index: true,       element: <Navigate to="dashboard" replace /> },
+          { path: "dashboard", element: <IndustrialSupervisorPortal /> },
+          { path: "logbooks",  element: <IndustrialSupervisorPortal /> },
+          { path: "report",    element: <IndustrialSupervisorPortal /> },
+        ],
+      },
+
+      // ── University Supervisor
+      {
+        path: "supervisor/university",
+        element: (
+          <ProtectedRoute allowedRoles={["university_supervisor"]}>
+            <DashboardLayout />
+          </ProtectedRoute>
+        ),
+        children: [
+          { index: true,         element: <Navigate to="dashboard" replace /> },
+          { path: "dashboard",   element: <UniversitySupervisorPortal /> },
+          { path: "logbooks",    element: <UniversitySupervisorPortal /> },
+          { path: "assessments", element: <UniversitySupervisorPortal /> },
+        ],
+      },
+
+
       { path: "*", element: <NotFound /> },
     ],
   },
