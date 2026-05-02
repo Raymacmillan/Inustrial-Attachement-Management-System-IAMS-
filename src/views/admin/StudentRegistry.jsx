@@ -9,6 +9,7 @@ function StatusBadge({ status }) {
   if (status === "allocated" || status === "matched") return <Badge variant="success">Matched</Badge>;
   if (status === "pending") return <Badge variant="warning">Searching</Badge>;
   if (status === "completed") return <Badge variant="success">Completed</Badge>;
+  if (status === "rejected") return <Badge variant="danger">Rejected</Badge>;
   return <Badge variant="default">{status || "inactive"}</Badge>;
 }
 
@@ -145,9 +146,9 @@ export default function StudentRegistry() {
             onChange={e => setFilter(e.target.value)}
           >
             <option value="all">All Students</option>
-            {/* value must match the DB enum — 'pending' not 'searching' */}
             <option value="pending">Searching</option>
             <option value="matched">Matched</option>
+            <option value="rejected">Rejected</option>
             <option value="no_docs">Missing Docs</option>
           </select>
           {(searchTerm || filter !== "all") && (
