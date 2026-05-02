@@ -213,7 +213,7 @@ export default function StudentAuditModal({ isOpen, onClose, student, onUpdate }
     setSaving(true);
     setSaveError("");
     try {
-      await coordinatorService.updateStudentStatus(student.id, "rejected");
+      await coordinatorService.rejectStudent(student.id, student.full_name);
       if (onUpdate) onUpdate(student.id, "rejected");
       setStatus("rejected");
       setConfirmReject(false);
@@ -615,10 +615,21 @@ export default function StudentAuditModal({ isOpen, onClose, student, onUpdate }
                   <AlertCircle size={16} className="text-red-500 shrink-0" />
                   <p className="text-sm font-bold text-red-700">This student has been rejected.</p>
                   <button
-                    onClick={() => { setStatus("pending"); handleStatusSave(); }}
-                    className="ml-auto text-xs font-black text-brand-600 hover:underline cursor-pointer"
+                    onClick={async () => {
+                      setSaving(true);
+                      try {
+                        await coordinatorService.reinstateStudent(student.id);
+                        if (onUpdate) onUpdate(student.id, "pending");
+                        setStatus("pending");
+                      } catch (err) {
+                        setSaveError(err.message);
+                      } finally {
+                        setSaving(false);
+                      }
+                    }}
+                    className="ml-auto text-xs font-black text-brand-600 hover:underline cursor-pointer whitespace-nowrap"
                   >
-                    Reinstate
+                    Reinstate →
                   </button>
                 </div>
               )}
