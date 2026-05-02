@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Loader2, ClipboardList, ArrowLeft, Sparkles, Clock, AlertTriangle } from "lucide-react";
+import { Loader2, ClipboardList, ArrowLeft, Sparkles, Clock, AlertTriangle, Eye } from "lucide-react";
 import { logbookService } from "../../services/logbookService";
+import { getStudentProfile } from "../../services/studentService";
 import { UserAuth } from "../../context/AuthContext";
 import EmptyState from "../../components/ui/EmptyState";
 import WeekCard from "./components/WeekCard";
 import LogbookModal from "./components/LogbookModal";
+import { LogbookPDFDownload, LogbookPreviewModal, useLogbookWeeks } from "./components/LogbookPDF";
 
 // Status → progress bar colour
 const BAR_COLOR = {
@@ -20,10 +22,15 @@ export default function LogbookManager() {
   const navigate  = useNavigate();
 
   const [placement,    setPlacement]    = useState(null);
+  const [student,      setStudent]      = useState(null);
   const [weeks,        setWeeks]        = useState([]);
   const [loading,      setLoading]      = useState(true);
-  const [isModalOpen,  setIsModalOpen]  = useState(false);
-  const [selectedWeek, setSelectedWeek] = useState(null);
+  const [isModalOpen,   setIsModalOpen]   = useState(false);
+  const [selectedWeek,  setSelectedWeek]  = useState(null);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+
+  // Fetch all weeks with daily_logs for PDF export — runs after placement loads
+  const { weeks: fullWeeks, loading: weeksLoading } = useLogbookWeeks(placement);
 
   // ── Load ─────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -32,9 +39,13 @@ export default function LogbookManager() {
 
     (async () => {
       try {
-        const p = await logbookService.getActivePlacement(user.id);
+        const [p, s] = await Promise.all([
+          logbookService.getActivePlacement(user.id),
+          getStudentProfile(user.id),
+        ]);
         if (!alive) return;
         setPlacement(p);
+        setStudent(s);
         if (p) {
           const w = await logbookService.getStudentWeeks(user.id);
           if (alive) setWeeks(w);
@@ -208,6 +219,26 @@ export default function LogbookManager() {
               </div>
             </div>
           )}
+
+          {/* Preview + Export — only show once at least one week exists */}
+          {weeks.length > 0 && (
+            <div className="flex flex-col gap-2 justify-center">
+              <button
+                onClick={() => setIsPreviewOpen(true)}
+                className="flex items-center gap-2 px-4 py-2.5 border border-gray-200
+                  bg-white hover:bg-gray-50 text-brand-900 font-black text-xs
+                  rounded-xl transition-all uppercase tracking-wider cursor-pointer"
+              >
+                <Eye size={13} /> Preview Logbook
+              </button>
+              <LogbookPDFDownload
+                student={student}
+                placement={placement}
+                weeks={fullWeeks}
+                loading={weeksLoading}
+              />
+            </div>
+          )}
         </div>
       </div>
 
@@ -268,12 +299,21 @@ export default function LogbookManager() {
         })}
       </div>
 
-      {/* ══ MODAL ══════════════════════════════════════════════════════════ */}
+      {/* ══ LOGBOOK ENTRY MODAL ════════════════════════════════════════════ */}
       {isModalOpen && selectedWeek && (
         <LogbookModal
           week={selectedWeek}
           onClose={handleClose}
           onStatusUpdate={handleStatusUpdate}
+        />
+      )}
+
+      {/* ══ PREVIEW & EXPORT MODAL ═════════════════════════════════════════ */}
+      {isPreviewOpen && (
+        <LogbookPreviewModal
+          student={student}
+          placement={placement}
+          onClose={() => setIsPreviewOpen(false)}
         />
       )}
     </div>
