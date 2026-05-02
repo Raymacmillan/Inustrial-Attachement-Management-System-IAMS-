@@ -240,6 +240,43 @@ export const coordinatorService = {
     return data;
   },
 
+  /**
+   * Reject a student — sets status to "rejected" and triggers a notification
+   * email so the student knows immediately.
+   */
+  rejectStudent: async (studentId, studentName, reason = "") => {
+    const { data, error } = await supabase
+      .from("student_profiles")
+      .update({ status: "rejected" })
+      .eq("id", studentId)
+      .select("id, status")
+      .single();
+
+    if (error) throw error;
+
+    // Fire notification email — non-fatal
+    supabase.functions.invoke("send-student-status-notification", {
+      body: { studentId, status: "rejected", studentName, reason },
+    }).catch((e) => console.warn("Rejection email failed:", e.message));
+
+    return data;
+  },
+
+  /**
+   * Reinstate a previously rejected student back to pending.
+   */
+  reinstateStudent: async (studentId) => {
+    const { data, error } = await supabase
+      .from("student_profiles")
+      .update({ status: "pending" })
+      .eq("id", studentId)
+      .select("id, status")
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
   // ─── PARTNER REGISTRY ────────────────────────────────────────────────────────
 
   getPartnerRegistry: async () => {
