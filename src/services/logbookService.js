@@ -18,18 +18,22 @@ export const logbookService = {
       .select(`
         id,
         organization_id,
+        position_title,
         start_date,
         end_date,
         status,
         duration_weeks,
-        organization_profiles (org_name)
+        industrial_supervisor_name,
+        industrial_supervisor_email,
+        university_supervisor_name,
+        university_supervisor_email,
+        organization_profiles (org_name, location)
       `)
       .eq("student_id", studentId)
       .eq("status", "active")
       .single();
 
     if (error) {
-      // PGRST116 = 0 rows — student simply not placed yet
       if (error.code === "PGRST116") return null;
       throw error;
     }
@@ -56,18 +60,18 @@ export const logbookService = {
     }
 
     const start = new Date(startDate);
-    const end = new Date(startDate);
+    const end   = new Date(startDate);
     end.setDate(start.getDate() + 4);
 
     const { data: week, error: weekError } = await supabase
       .from("logbook_weeks")
       .insert([{
-        student_id: studentId,
+        student_id:   studentId,
         placement_id: placementId,
-        week_number: weekNumber,
-        start_date: start.toISOString().split("T")[0],
-        end_date: end.toISOString().split("T")[0],
-        status: "draft",
+        week_number:  weekNumber,
+        start_date:   start.toISOString().split("T")[0],
+        end_date:     end.toISOString().split("T")[0],
+        status:       "draft",
       }])
       .select()
       .single();
@@ -84,11 +88,11 @@ export const logbookService = {
       const logDate = new Date(start);
       logDate.setDate(start.getDate() + index);
       return {
-        week_id: week.id,
-        log_date: logDate.toISOString().split("T")[0],
-        day_of_week: day,
+        week_id:          week.id,
+        log_date:         logDate.toISOString().split("T")[0],
+        day_of_week:      day,
         activity_details: "",
-        hours_worked: 8.0,
+        hours_worked:     8.0,
       };
     });
 
@@ -113,7 +117,7 @@ export const logbookService = {
 
     if (error) throw error;
 
-    data.daily_logs.sort(
+    data.daily_logs = (data.daily_logs || []).sort(
       (a, b) => new Date(a.log_date) - new Date(b.log_date)
     );
     return data;
@@ -126,9 +130,12 @@ export const logbookService = {
     const { error } = await supabase
       .from("daily_logs")
       .update({
-        activity_details: updates.activity_details,
-        hours_worked: updates.hours_worked,
-        updated_at: new Date().toISOString(),
+        activity_details:  updates.activity_details,
+        tasks_completed:   updates.tasks_completed,
+        learning_outcomes: updates.learning_outcomes,
+        challenges:        updates.challenges,
+        hours_worked:      updates.hours_worked,
+        updated_at:        new Date().toISOString(),
       })
       .eq("id", logId);
 
@@ -137,10 +144,37 @@ export const logbookService = {
   },
 
   /**
-   * 5. Submit a week for supervisor approval.
+   * 5. Fetch all logbook week summaries for a student.
+   * Returns lightweight rows — no daily_logs included.
+   * Used by LogbookManager to render the week grid and progress bar.
+   */
+  getStudentWeeks: async (studentId) => {
+    const { data, error } = await supabase
+      .from("logbook_weeks")
+      .select(`
+        id,
+        week_number,
+        start_date,
+        end_date,
+        status,
+        submitted_at,
+        approved_at,
+        supervisor_comments,
+        stamped_by_name,
+        stamped_by_title
+      `)
+      .eq("student_id", studentId)
+      .order("week_number", { ascending: true });
+
+    if (error) throw error;
+    return data ?? [];
+  },
+
+  /**
+   * 6. Submit a week for supervisor approval.
+   * .neq guard means approved weeks are silently skipped.
    */
   submitWeek: async (weekId) => {
-    // Only approved weeks cannot be resubmitted — all others can
     const { error } = await supabase
       .from("logbook_weeks")
       .update({

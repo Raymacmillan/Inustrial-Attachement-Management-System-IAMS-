@@ -172,12 +172,10 @@ export default function StudentAuditModal({ isOpen, onClose, student, onUpdate }
     setSaveError("");
     try {
       if (!manualOverride && selectedSupId) {
-        // Assign from roster dropdown — auto-fills name/email
         const sup = await coordinatorService.assignIndustrialSupervisor(placement.id, selectedSupId);
         setIndName(sup.full_name);
         setIndEmail(sup.email);
       } else {
-        // Manual override — free text
         await coordinatorService.updatePlacementSupervisors(placement.id, {
           industrial_supervisor_name:  indName,
           industrial_supervisor_email: indEmail,
@@ -219,6 +217,20 @@ export default function StudentAuditModal({ isOpen, onClose, student, onUpdate }
       setConfirmReject(false);
     } catch (err) {
       setSaveError(err.message || "Failed to reject student.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleReinstate = async () => {
+    setSaving(true);
+    setSaveError("");
+    try {
+      await coordinatorService.reinstateStudent(student.id);
+      if (onUpdate) onUpdate(student.id, "pending");
+      setStatus("pending");
+    } catch (err) {
+      setSaveError(err.message || "Failed to reinstate student.");
     } finally {
       setSaving(false);
     }
@@ -615,21 +627,10 @@ export default function StudentAuditModal({ isOpen, onClose, student, onUpdate }
                   <AlertCircle size={16} className="text-red-500 shrink-0" />
                   <p className="text-sm font-bold text-red-700">This student has been rejected.</p>
                   <button
-                    onClick={async () => {
-                      setSaving(true);
-                      try {
-                        await coordinatorService.reinstateStudent(student.id);
-                        if (onUpdate) onUpdate(student.id, "pending");
-                        setStatus("pending");
-                      } catch (err) {
-                        setSaveError(err.message);
-                      } finally {
-                        setSaving(false);
-                      }
-                    }}
-                    className="ml-auto text-xs font-black text-brand-600 hover:underline cursor-pointer whitespace-nowrap"
+                    onClick={() => { setStatus("pending"); handleStatusSave(); }}
+                    className="ml-auto text-xs font-black text-brand-600 hover:underline cursor-pointer"
                   >
-                    Reinstate →
+                    Reinstate
                   </button>
                 </div>
               )}

@@ -165,16 +165,28 @@ export default function LogbookModal({ week, onClose, onStatusUpdate }) {
             </button>
           </div>
 
-          {/* Supervisor feedback banner */}
-          {isFlagged && week.supervisor_comments && (
-            <div className="mx-6 mt-4 flex items-start gap-2.5 p-3.5 bg-red-50
-              border border-red-100 rounded-2xl">
-              <AlertTriangle size={14} className="text-red-500 mt-0.5 shrink-0" />
+          {/* Supervisor comments — shown regardless of status whenever comments exist */}
+          {week.supervisor_comments && (
+            <div className={`mx-6 mt-4 flex items-start gap-2.5 p-3.5 rounded-2xl border
+              ${isFlagged
+                ? "bg-red-50 border-red-100"
+                : isLocked
+                ? "bg-green-50 border-green-100"
+                : "bg-brand-100 border-brand-100"
+              }`}>
+              {isFlagged
+                ? <AlertTriangle size={14} className="text-red-500 mt-0.5 shrink-0" />
+                : <CheckCircle size={14} className={`mt-0.5 shrink-0 ${isLocked ? "text-green-600" : "text-brand-500"}`} />
+              }
               <div>
-                <p className="text-[10px] font-black text-red-500 uppercase tracking-widest mb-0.5">
-                  Supervisor Feedback
+                <p className={`text-[10px] font-black uppercase tracking-widest mb-0.5
+                  ${isFlagged ? "text-red-500" : isLocked ? "text-green-600" : "text-brand-500"}`}>
+                  {isFlagged ? "Supervisor Feedback — Revision Required" : "Supervisor Comments"}
                 </p>
-                <p className="text-sm text-red-700 leading-relaxed">{week.supervisor_comments}</p>
+                <p className={`text-sm leading-relaxed
+                  ${isFlagged ? "text-red-700" : isLocked ? "text-green-800" : "text-brand-900"}`}>
+                  {week.supervisor_comments}
+                </p>
               </div>
             </div>
           )}
