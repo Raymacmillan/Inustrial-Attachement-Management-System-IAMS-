@@ -54,8 +54,8 @@ function WeekReviewModal({ weekId, studentName, onClose, onUpdated }) {
   const [week,        setWeek]        = useState(null);
   const [loading,     setLoading]     = useState(true);
   const [feedback,    setFeedback]    = useState("");
-  const [acting,      setActing]      = useState(null); // "approve"|"flag"
-  const [confirmOpen, setConfirmOpen] = useState(null); // "approve"|"flag"
+  const [acting,      setActing]      = useState(null);
+  const [confirmOpen, setConfirmOpen] = useState(null);
   const [error,       setError]       = useState("");
 
   useEffect(() => {
@@ -72,13 +72,13 @@ function WeekReviewModal({ weekId, studentName, onClose, onUpdated }) {
     setActing("approve");
     setError("");
     try {
-      // Get supervisor profile for stamp
       const { supervisor } = await supervisorService.getIndustrialSupervisorDashboard(user.id);
       await supervisorService.approveWeek(
         weekId,
         user.id,
         supervisor?.full_name || user.email,
-        supervisor?.role_title || "Industrial Supervisor"
+        supervisor?.role_title || "Industrial Supervisor",
+        feedback.trim() || null,
       );
       onUpdated(weekId, "approved");
       onClose();
@@ -251,11 +251,35 @@ function WeekReviewModal({ weekId, studentName, onClose, onUpdated }) {
                   })}
                 </div>
 
-                {/* Feedback input (only when can act) */}
+                {/* Previous supervisor comments — always shown when present */}
+                {week?.supervisor_comments && (
+                  <div className={`flex items-start gap-3 p-4 rounded-2xl border
+                    ${week.status === "action_needed"
+                      ? "bg-red-50 border-red-100"
+                      : "bg-green-50 border-green-100"
+                    }`}>
+                    {week.status === "action_needed"
+                      ? <AlertTriangle size={15} className="text-red-500 mt-0.5 shrink-0" />
+                      : <CheckCircle size={15} className="text-green-600 mt-0.5 shrink-0" />
+                    }
+                    <div>
+                      <p className={`text-[10px] font-black uppercase tracking-widest mb-1
+                        ${week.status === "action_needed" ? "text-red-500" : "text-green-600"}`}>
+                        {week.status === "action_needed" ? "Previous Feedback Sent" : "Supervisor Comments"}
+                      </p>
+                      <p className={`text-sm leading-relaxed
+                        ${week.status === "action_needed" ? "text-red-700" : "text-green-800"}`}>
+                        {week.supervisor_comments}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Comments / feedback textarea — available for submitted weeks */}
                 {canAct && (
                   <Textarea
-                    label="Feedback for student (required if flagging)"
-                    placeholder="Write constructive feedback — what needs to be corrected or expanded…"
+                    label={`Comments for student${week?.status === "action_needed" ? "" : " (optional — visible after approving)"}`}
+                    placeholder="Positive feedback, suggestions, or corrections…"
                     value={feedback}
                     onChange={(e) => setFeedback(e.target.value)}
                     rows={3}
