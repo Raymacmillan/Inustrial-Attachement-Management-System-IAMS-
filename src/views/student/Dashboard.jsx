@@ -1,645 +1,455 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  X, FileText, ExternalLink, MapPin, Info, Edit3,
-  Check, ChevronDown, ChevronUp, AlertCircle, Zap,
-  Calendar, User, Mail, UserCheck, Save, ChevronRight,
-} from "lucide-react";
+import { UserAuth } from "../../context/AuthContext";
+import * as studentService from "../../services/studentService";
 import Button from "../../components/ui/Button";
-import Badge from "../../components/ui/Badge";
-import { coordinatorService } from "../../services/coordinatorService";
+import StatCard from "../../components/ui/StatCard";
+import {
+  User, Briefcase, ClipboardList, GraduationCap, ArrowRight,
+  CheckCircle, FileWarning, LayoutDashboard, ExternalLink, Target,
+  Building2, MapPin, Calendar, Clock, UserCheck, Mail, Phone,
+  BookOpen, Zap,
+} from "lucide-react";
 
-// ── Section accordion ─────────────────────────────────────────────────────────
-function Section({ title, icon: Icon, defaultOpen = false, children }) {
-  const [open, setOpen] = useState(defaultOpen);
-  return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-      <button
-        className="w-full flex items-center justify-between px-5 py-4 text-left cursor-pointer
-          hover:bg-gray-50 transition-colors"
-        onClick={() => setOpen((o) => !o)}
-      >
-        <span className="flex items-center gap-2 text-xs font-black text-gray-500 uppercase tracking-widest">
-          <Icon size={15} className="text-brand-600" /> {title}
-        </span>
-        {open ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
-      </button>
-      {open && <div className="px-5 pb-5">{children}</div>}
-    </div>
-  );
-}
-
-// ── Document card ─────────────────────────────────────────────────────────────
-function DocCard({ label, url }) {
-  return (
-    <div className={`flex items-center justify-between p-4 rounded-xl border-2
-      ${url ? "border-green-200 bg-green-50/40" : "border-red-100 bg-red-50/30"}`}>
-      <div className="flex items-center gap-3">
-        <div className={`p-2 rounded-lg ${url ? "bg-green-100 text-green-600" : "bg-gray-100 text-gray-300"}`}>
-          <FileText size={18} />
-        </div>
-        <div>
-          <p className="text-sm font-bold text-brand-900">{label}</p>
-          <p className="text-[10px] text-gray-400 font-bold uppercase mt-0.5">
-            {url ? "Uploaded ✓" : "Missing — Action Required"}
-          </p>
-        </div>
-      </div>
-      {url ? (
-        <a href={url} target="_blank" rel="noreferrer">
-          <Button variant="secondary" size="sm"><ExternalLink size={14} /> Open</Button>
-        </a>
-      ) : (
-        <span className="text-[9px] font-black text-red-400 uppercase bg-red-100 px-2 py-1 rounded-lg">
-          Missing
-        </span>
-      )}
-    </div>
-  );
-}
-
-// ── Main modal ────────────────────────────────────────────────────────────────
-export default function StudentAuditModal({ isOpen, onClose, student, onUpdate }) {
-  const navigate = useNavigate();
-
-  const [status,    setStatus]    = useState(student?.status || "pending");
-  const [saving,    setSaving]    = useState(false);
-  const [saved,     setSaved]     = useState(false);
-  const [saveError, setSaveError] = useState("");
-
-  const [placement,     setPlacement]     = useState(null);
-  const [dateForm,      setDateForm]      = useState({ start_date: "", end_date: "" });
-  const [savingDates,   setSavingDates]   = useState(false);
-  const [datesSaved,    setDatesSaved]    = useState(false);
-
-  // Industrial supervisor — dropdown from org roster + manual override
-  const [selectedSupId,    setSelectedSupId]    = useState("");
-  const [manualOverride,   setManualOverride]    = useState(false);
-  const [indName,          setIndName]           = useState("");
-  const [indEmail,         setIndEmail]          = useState("");
-  const [savingInd,        setSavingInd]         = useState(false);
-  const [indSaved,         setIndSaved]          = useState(false);
-
-  // University supervisor — always free text
-  const [uniName,          setUniName]           = useState("");
-  const [uniEmail,         setUniEmail]          = useState("");
-  const [savingUni,        setSavingUni]         = useState(false);
-  const [uniSaved,         setUniSaved]          = useState(false);
-  const [confirmReject,    setConfirmReject]      = useState(false);
+export default function StudentDashboard() {
+  const { user }  = UserAuth();
+  const navigate  = useNavigate();
+  const [loading, setLoading]       = useState(true);
+  const [student, setStudent]       = useState(null);
+  const [preferences, setPreferences] = useState(null);
+  const [placement, setPlacement]   = useState(null);
 
   useEffect(() => {
-    if (!student) return;
-    setStatus(student.status || "pending");
-    setSaveError("");
-    setSaved(false);
-    setDatesSaved(false);
-    setIndSaved(false);
-    setUniSaved(false);
-    setConfirmReject(false);
-    setPlacement(null);
-    setSelectedSupId("");
-    setManualOverride(false);
-
-    if (student.status === "matched" || student.status === "allocated") {
-      coordinatorService.getStudentPlacement(student.id).then((data) => {
-        if (!data) return;
-        setPlacement(data);
-        setDateForm({ start_date: data.start_date || "", end_date: data.end_date || "" });
-        setIndName(data.industrial_supervisor_name || "");
-        setIndEmail(data.industrial_supervisor_email || "");
-        setUniName(data.university_supervisor_name || "");
-        setUniEmail(data.university_supervisor_email || "");
-      }).catch((e) => setSaveError(e.message));
-    }
-  }, [student]);
-
-  if (!student || !isOpen) return null;
-
-  const prefs    = student.student_preferences || {};
-  const isPlaced = student.status === "matched" || student.status === "allocated";
-
-  // Org's supervisor roster for the dropdown
-  const orgSupervisors = placement?.organization_profiles?.organization_supervisors || [];
-
-  const calcWeeks = () => {
-    if (!dateForm.start_date || !dateForm.end_date) return null;
-    const diff = new Date(dateForm.end_date) - new Date(dateForm.start_date);
-    return Math.max(Math.round(diff / (1000 * 60 * 60 * 24 * 7)), 1);
-  };
-
-  const formatDate = (d) => d
-    ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
-    : "—";
-
-  const weeks = calcWeeks();
-
-  // ── Save handlers ─────────────────────────────────────────────────────────
-
-  const handleStatusSave = async () => {
-    if (status === student.status) return;
-    setSaving(true);
-    setSaveError("");
-    try {
-      await coordinatorService.updateStudentStatus(student.id, status);
-      if (onUpdate) onUpdate(student.id, status);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
-    } catch (err) {
-      setSaveError(err.message || "Status update failed.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleDatesSave = async () => {
-    if (!placement?.id) return;
-    setSavingDates(true);
-    setSaveError("");
-    try {
-      await coordinatorService.updatePlacementDates(placement.id, dateForm.start_date, dateForm.end_date);
-      setDatesSaved(true);
-      setTimeout(() => setDatesSaved(false), 2500);
-    } catch (err) {
-      setSaveError(err.message || "Failed to update dates.");
-    } finally {
-      setSavingDates(false);
-    }
-  };
-
-  const handleIndustrialSave = async () => {
-    if (!placement?.id) return;
-    setSavingInd(true);
-    setSaveError("");
-    try {
-      if (!manualOverride && selectedSupId) {
-        // Assign from roster dropdown — auto-fills name/email
-        const sup = await coordinatorService.assignIndustrialSupervisor(placement.id, selectedSupId);
-        setIndName(sup.full_name);
-        setIndEmail(sup.email);
-      } else {
-        // Manual override — free text
-        await coordinatorService.updatePlacementSupervisors(placement.id, {
-          industrial_supervisor_name:  indName,
-          industrial_supervisor_email: indEmail,
-          university_supervisor_name:  uniName,
-          university_supervisor_email: uniEmail,
-        });
+    const fetchPortalData = async () => {
+      try {
+        const [profileData, prefData, placementData] = await Promise.all([
+          studentService.getStudentProfile(user.id),
+          studentService.getStudentPreferences(user.id),
+          studentService.getStudentPlacement(user.id),
+        ]);
+        setStudent(profileData);
+        setPreferences(prefData);
+        setPlacement(placementData);
+      } catch (err) {
+        console.error("Dashboard Sync Error:", err);
+      } finally {
+        setLoading(false);
       }
-      setIndSaved(true);
-      setTimeout(() => setIndSaved(false), 2500);
-    } catch (err) {
-      setSaveError(err.message || "Failed to save industrial supervisor.");
-    } finally {
-      setSavingInd(false);
-    }
+    };
+    if (user?.id) fetchPortalData();
+  }, [user?.id]);
+
+  const calculateProgress = () => {
+    let p = 0;
+    if (!student) return p;
+    if (student.full_name)      p += 15;
+    if (student.avatar_url)     p += 15;
+    if (student.cv_url)         p += 15;
+    if (student.transcript_url) p += 15;
+    if (preferences?.technical_skills?.length > 0)   p += 20;
+    if (preferences?.preferred_roles?.length > 0)    p += 10;
+    if (preferences?.preferred_locations?.length > 0) p += 10;
+    return p;
   };
 
-  const handleUniversitySave = async () => {
-    if (!placement?.id) return;
-    setSavingUni(true);
-    setSaveError("");
-    try {
-      await coordinatorService.assignUniversitySupervisor(placement.id, uniName, uniEmail);
-      setUniSaved(true);
-      setTimeout(() => setUniSaved(false), 2500);
-    } catch (err) {
-      setSaveError(err.message || "Failed to save university supervisor.");
-    } finally {
-      setSavingUni(false);
-    }
+  if (loading) return (
+    <div className="flex items-center justify-center min-h-[60vh]">
+      <div className="animate-pulse text-brand-600 font-black text-xl tracking-tighter">
+        SYNCHRONIZING PORTAL...
+      </div>
+    </div>
+  );
+
+  const progress    = calculateProgress();
+  const isComplete  = progress === 100;
+  const isPlaced    = Boolean(placement);
+  const org         = placement?.organization_profiles;
+
+  // Format a date string to a readable format e.g. "09 Apr 2026"
+  const formatDate = (dateStr) => {
+    if (!dateStr) return "—";
+    return new Date(dateStr).toLocaleDateString("en-GB", {
+      day: "2-digit", month: "short", year: "numeric",
+    });
   };
 
-  const handleReject = async () => {
-    setSaving(true);
-    setSaveError("");
-    try {
-      await coordinatorService.updateStudentStatus(student.id, "rejected");
-      if (onUpdate) onUpdate(student.id, "rejected");
-      setStatus("rejected");
-      setConfirmReject(false);
-    } catch (err) {
-      setSaveError(err.message || "Failed to reject student.");
-    } finally {
-      setSaving(false);
-    }
+  // Calculate days remaining until end date
+  const daysRemaining = () => {
+    if (!placement?.end_date) return null;
+    const diff = new Date(placement.end_date) - new Date();
+    return Math.ceil(diff / (1000 * 60 * 60 * 24));
   };
+
+  const remaining = daysRemaining();
 
   return (
-    <div className="fixed inset-0 z-[150] flex flex-col bg-gray-50 animate-in slide-in-from-bottom duration-300">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-10 space-y-8 md:space-y-10 pb-32 animate-in fade-in duration-700">
 
-      {/* Header */}
-      <header className="bg-white border-b border-gray-100 px-4 sm:px-8 py-4 flex items-center gap-4 sticky top-0 z-10 shadow-sm">
-        <div className="w-12 h-12 rounded-xl overflow-hidden bg-brand-900 text-white flex items-center justify-center font-black text-lg shrink-0">
-          {student.avatar_url
-            ? <img src={student.avatar_url} alt={student.full_name} className="w-full h-full object-cover" />
-            : student.full_name?.charAt(0)
-          }
-        </div>
-        <div className="flex-1 min-w-0">
-          <h2 className="font-display text-lg sm:text-2xl font-black text-brand-900 truncate">
-            {student.full_name}
-          </h2>
-          <p className="text-[10px] text-brand-400 font-bold uppercase tracking-widest">
-            {student.student_id} · {student.major || "CS"}
-          </p>
-        </div>
-        <button
-          onClick={onClose}
-          className="p-2 hover:bg-gray-100 rounded-xl transition-colors text-gray-400
-            hover:text-brand-900 shrink-0 cursor-pointer"
-        >
-          <X size={24} />
-        </button>
-      </header>
-
-      {/* Body */}
-      <main className="flex-1 overflow-y-auto p-4 sm:p-8">
-        <div className="max-w-4xl mx-auto space-y-4">
-
-          {/* Stats bar */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 grid grid-cols-3 gap-4 text-center">
-            <div>
-              <p className="text-2xl font-black text-brand-900">{student.gpa || "—"}</p>
-              <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mt-1">GPA</p>
+      {/* ── Welcome Hero ── */}
+      <section className="relative overflow-hidden bg-brand-900 rounded-[1.5rem] md:rounded-[2rem] p-8 md:p-12 text-white shadow-xl border border-white/5">
+        <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8 text-center md:text-left">
+          <div className="space-y-4 max-w-2xl">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/20 text-brand-200 text-[9px] md:text-[10px] font-bold uppercase tracking-widest">
+              <GraduationCap size={14} className="text-brand-400" />
+              {student?.major || "3rd Year Computer Science"}
             </div>
-            <div>
-              <p className="text-2xl font-black text-brand-900">{prefs.technical_skills?.length || 0}</p>
-              <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mt-1">Skills</p>
-            </div>
-            <div>
-              <div className="flex justify-center mt-1">
-                <Badge variant={isPlaced ? "success" : "warning"}>{student.status}</Badge>
-              </div>
-              <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mt-1">Status</p>
+            <div className="space-y-2">
+              <h1 className="text-3xl md:text-5xl lg:text-6xl font-display font-black tracking-tight text-white leading-tight">
+                Dumelang, {student?.full_name?.split(" ")[0] || "Student"}
+              </h1>
+              <p className="text-brand-100/80 font-medium text-sm md:text-lg max-w-md leading-relaxed">
+                {isPlaced
+                  ? `You are placed at ${org?.org_name}. Track your attachment journey below.`
+                  : "Track your matching status and log your attachment journey here."
+                }
+              </p>
             </div>
           </div>
+          <Button
+            variant="secondary"
+            size="lg"
+            className="group transition-all hover:scale-[1.02] border-none"
+            onClick={() => navigate("/student/profile")}
+          >
+            <span className="font-bold text-[10px] uppercase tracking-widest">Manage Identity</span>
+            <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
+          </Button>
+        </div>
+        <div className="absolute -bottom-24 -right-24 w-96 h-96 bg-brand-500/10 rounded-full blur-[120px]" />
+      </section>
 
-          {/* Error banner */}
-          {saveError && (
-            <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-100 rounded-xl">
-              <AlertCircle size={14} className="text-red-500 shrink-0" />
-              <p className="text-xs font-bold text-red-600 flex-1">{saveError}</p>
-              <button onClick={() => setSaveError("")} className="text-red-400 hover:text-red-600 cursor-pointer">
-                <X size={12} />
-              </button>
+      {/* ── Rejected State Banner ── */}
+      {student?.status === "rejected" && (
+        <section className="bg-red-50 border-2 border-red-200 rounded-2xl p-6 flex items-start gap-5">
+          <div className="w-12 h-12 rounded-2xl bg-red-100 flex items-center justify-center shrink-0">
+            <FileWarning size={22} className="text-red-500" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="font-display font-bold text-red-800 text-lg mb-1">
+              Application Not Successful
+            </h3>
+            <p className="text-sm text-red-600 leading-relaxed mb-4">
+              Your application for industrial attachment has not been accepted at this time.
+              Please contact the coordinator for more information or to discuss next steps.
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <a
+                href="mailto:coordinator@ub.ac.bw"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-red-100 hover:bg-red-200
+                  text-red-700 font-black text-xs rounded-xl transition-colors uppercase tracking-wider"
+              >
+                <Mail size={13} /> Contact Coordinator
+              </a>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => navigate("/student/preferences")}
+              >
+                Update Preferences
+              </Button>
             </div>
-          )}
+          </div>
+        </section>
+      )}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-6">
+        <StatCard
+          title="Placement Status"
+          value={student?.status || "Pending"}
+          icon={Briefcase}
+          colorClass="border-brand-600"
+        />
+        <StatCard
+          title="Skills Listed"
+          value={`${preferences?.technical_skills?.length || 0} Tags`}
+          icon={Target}
+          colorClass="border-brand-200"
+        />
+        <StatCard
+          title="Matching Tier"
+          value={parseFloat(student?.gpa) >= 3.5 ? "Priority" : "Standard"}
+          icon={LayoutDashboard}
+          colorClass="border-brand-400"
+        />
+      </div>
 
-          <Section title="Documents" icon={FileText} defaultOpen>
-            <div className="space-y-3">
-              <DocCard label="Curriculum Vitae"    url={student.cv_url} />
-              <DocCard label="Academic Transcript" url={student.transcript_url} />
-            </div>
-          </Section>
+      {/* ── Placement Card — only shown when student is placed ── */}
+      {isPlaced && (
+        <section className="space-y-4">
+          <div className="flex items-center gap-2 px-1">
+            <Zap size={14} className="text-brand-600" fill="currentColor" />
+            <h2 className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-400">
+              Active Placement
+            </h2>
+          </div>
 
-          <Section title="Skill Matrix" icon={Info}>
-            {prefs.technical_skills?.length > 0 ? (
-              <div className="flex flex-wrap gap-2">
-                {prefs.technical_skills.map((s, i) => (
-                  <span key={i} className="px-3 py-1.5 bg-brand-100 text-brand-700 rounded-xl
-                    font-bold text-xs border border-brand-100 uppercase">{s}</span>
-                ))}
+          <div className="bg-white border border-gray-100 rounded-lg shadow-sm overflow-hidden">
+
+            {/* Org header */}
+            <div className="bg-brand-900 px-6 md:px-8 py-6 flex items-center gap-5">
+              <div className="w-14 h-14 rounded-2xl bg-brand-800 border border-brand-700 overflow-hidden flex items-center justify-center shrink-0">
+                {org?.avatar_url
+                  ? <img src={org.avatar_url} alt={org.org_name} className="w-full h-full object-cover" />
+                  : <Building2 size={24} className="text-brand-400" />
+                }
               </div>
-            ) : (
-              <p className="text-sm text-gray-400 italic">No skills listed.</p>
-            )}
-          </Section>
-
-          <Section title="Career Preferences" icon={MapPin}>
-            <div className="space-y-4">
-              <div>
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">
-                  Preferred Locations
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {prefs.preferred_locations?.length > 0
-                    ? prefs.preferred_locations.map((loc, i) => (
-                        <span key={i} className="text-xs bg-brand-100 text-brand-700 px-3 py-1 rounded-xl font-bold">{loc}</span>
-                      ))
-                    : <span className="text-sm text-gray-400 italic">Not specified</span>
-                  }
-                </div>
-              </div>
-              <div>
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">
-                  Preferred Roles
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {prefs.preferred_roles?.length > 0
-                    ? prefs.preferred_roles.map((r, i) => (
-                        <span key={i} className="text-xs bg-gray-100 text-gray-600 px-3 py-1 rounded-xl font-bold">{r}</span>
-                      ))
-                    : <span className="text-sm text-gray-400 italic">Not specified</span>
-                  }
-                </div>
-              </div>
-            </div>
-          </Section>
-
-          {/* Attachment dates */}
-          {placement && (
-            <Section title="Attachment Dates" icon={Calendar} defaultOpen>
-              <div className="space-y-4">
-                <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">
-                  Placement at {placement.organization_profiles?.org_name}
-                </p>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">Start Date</label>
-                    <input
-                      type="date"
-                      value={dateForm.start_date}
-                      onChange={(e) => setDateForm((f) => ({ ...f, start_date: e.target.value }))}
-                      className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl
-                        text-sm font-semibold focus:ring-2 focus:ring-brand-500 outline-none cursor-pointer"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">End Date</label>
-                    <input
-                      type="date"
-                      value={dateForm.end_date}
-                      min={dateForm.start_date}
-                      onChange={(e) => setDateForm((f) => ({ ...f, end_date: e.target.value }))}
-                      className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl
-                        text-sm font-semibold focus:ring-2 focus:ring-brand-500 outline-none cursor-pointer"
-                    />
-                  </div>
-                </div>
-
-                {weeks && (
-                  <p className="text-xs font-bold text-brand-600 bg-brand-100 px-3 py-2 rounded-xl">
-                    Duration: {weeks} week{weeks !== 1 ? "s" : ""}
-                    <span className="text-gray-400 font-normal ml-2">
-                      ({formatDate(dateForm.start_date)} → {formatDate(dateForm.end_date)})
+              <div className="min-w-0">
+                <h3 className="font-display text-xl md:text-2xl font-bold text-white truncate">
+                  {org?.org_name}
+                </h3>
+                <div className="flex flex-wrap items-center gap-3 mt-1">
+                  <span className="text-[10px] font-bold text-brand-300 uppercase tracking-widest">
+                    {placement.position_title}
+                  </span>
+                  {org?.industry && (
+                    <span className="text-[9px] font-black text-brand-500 uppercase tracking-widest bg-brand-800 px-2 py-0.5 rounded-lg">
+                      {org.industry}
                     </span>
-                  </p>
-                )}
-
-                <Button size="sm" loading={savingDates} variant={datesSaved ? "secondary" : "primary"} onClick={handleDatesSave}>
-                  {datesSaved ? <><Check size={14} /> Dates Saved</> : <><Save size={14} /> Save Dates</>}
-                </Button>
+                  )}
+                </div>
               </div>
-            </Section>
-          )}
+              <div className="ml-auto shrink-0">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-500/20 text-green-400 rounded-xl text-[10px] font-black uppercase tracking-widest border border-green-500/30">
+                  <CheckCircle size={11} /> Active
+                </span>
+              </div>
+            </div>
 
-          {/* Industrial supervisor assignment */}
-          {placement && (
-            <Section title="Industrial Supervisor" icon={UserCheck} defaultOpen>
+            <div className="p-6 md:p-8 grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
+
+              {/* ── Attachment dates ── */}
               <div className="space-y-4">
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">
-                    Select from {placement.organization_profiles?.org_name}'s roster
-                  </p>
-                  <button
-                    onClick={() => setManualOverride((o) => !o)}
-                    className="text-[10px] font-black text-brand-600 hover:underline uppercase tracking-widest cursor-pointer"
-                  >
-                    {manualOverride ? "← Use roster" : "Manual override →"}
-                  </button>
-                </div>
-
-                {!manualOverride ? (
-                  /* Roster dropdown */
-                  orgSupervisors.length > 0 ? (
-                    <div className="space-y-3">
-                      <div className="space-y-2">
-                        {orgSupervisors.filter((s) => s.is_active).map((sup) => (
-                          <label
-                            key={sup.id}
-                            className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer
-                              transition-all ${selectedSupId === sup.id
-                                ? "border-brand-500 bg-brand-100"
-                                : "border-gray-100 hover:border-gray-200"
-                              }`}
-                          >
-                            <input
-                              type="radio"
-                              name="ind_supervisor"
-                              value={sup.id}
-                              checked={selectedSupId === sup.id}
-                              onChange={() => setSelectedSupId(sup.id)}
-                              className="text-brand-600 focus:ring-brand-500"
-                            />
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-bold text-brand-900 truncate">{sup.full_name}</p>
-                              <p className="text-[10px] text-gray-400 truncate">{sup.email}</p>
-                              {sup.role_title && (
-                                <p className="text-[10px] font-black text-brand-400 uppercase tracking-wider">
-                                  {sup.role_title}
-                                </p>
-                              )}
-                            </div>
-                            {sup.user_id && (
-                              <span className="text-[9px] font-black text-success bg-brand-100
-                                px-1.5 py-0.5 rounded-full border border-brand-100 uppercase tracking-wider shrink-0">
-                                Registered
-                              </span>
-                            )}
-                          </label>
-                        ))}
-                      </div>
-
-                      {/* Current assignment display */}
-                      {(indName || indEmail) && (
-                        <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
-                          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">
-                            Currently Assigned
-                          </p>
-                          <p className="text-sm font-bold text-brand-900">{indName || "—"}</p>
-                          <p className="text-xs text-gray-500">{indEmail || "—"}</p>
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="p-4 bg-amber-50 border border-amber-100 rounded-xl">
-                      <p className="text-xs font-bold text-amber-700">
-                        No supervisors on record for this organisation. Use manual override to enter details.
-                      </p>
-                    </div>
-                  )
-                ) : (
-                  /* Manual override inputs */
-                  <div className="space-y-3">
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">Name</label>
-                      <input
-                        type="text"
-                        placeholder="Supervisor full name"
-                        value={indName}
-                        onChange={(e) => setIndName(e.target.value)}
-                        className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl
-                          text-sm font-semibold focus:ring-2 focus:ring-brand-500 outline-none"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">Email</label>
-                      <input
-                        type="email"
-                        placeholder="supervisor@company.com"
-                        value={indEmail}
-                        onChange={(e) => setIndEmail(e.target.value)}
-                        className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl
-                          text-sm font-semibold focus:ring-2 focus:ring-brand-500 outline-none"
-                      />
-                    </div>
+                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                  <Calendar size={13} className="text-brand-600" /> Attachment Period
+                </h4>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+                    <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Start Date</span>
+                    <span className="text-sm font-black text-brand-900">{formatDate(placement.start_date)}</span>
                   </div>
-                )}
-
-                <Button
-                  size="sm"
-                  loading={savingInd}
-                  variant={indSaved ? "secondary" : "primary"}
-                  onClick={handleIndustrialSave}
-                  disabled={!manualOverride && !selectedSupId}
-                >
-                  {indSaved ? <><Check size={14} /> Saved</> : <><Save size={14} /> Assign Industrial Supervisor</>}
-                </Button>
-              </div>
-            </Section>
-          )}
-
-          {/* University supervisor */}
-          {placement && (
-            <Section title="University Supervisor (UB)" icon={User} defaultOpen>
-              <div className="space-y-3">
-                <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">
-                  UB department lecturer who will visit this student
-                </p>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">Name</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Dr. Jane Smith"
-                    value={uniName}
-                    onChange={(e) => setUniName(e.target.value)}
-                    className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl
-                      text-sm font-semibold focus:ring-2 focus:ring-brand-500 outline-none"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">Email</label>
-                  <input
-                    type="email"
-                    placeholder="lecturer@ub.ac.bw"
-                    value={uniEmail}
-                    onChange={(e) => setUniEmail(e.target.value)}
-                    className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl
-                      text-sm font-semibold focus:ring-2 focus:ring-brand-500 outline-none"
-                  />
-                </div>
-                <Button
-                  size="sm"
-                  loading={savingUni}
-                  variant={uniSaved ? "secondary" : "primary"}
-                  onClick={handleUniversitySave}
-                >
-                  {uniSaved ? <><Check size={14} /> Saved</> : <><Save size={14} /> Assign University Supervisor</>}
-                </Button>
-              </div>
-            </Section>
-          )}
-
-          {/* Coordinator actions */}
-          <Section title="Coordinator Actions" icon={Edit3} defaultOpen>
-            <div className="space-y-5">
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">
-                  Update Attachment Status
-                </label>
-                <div className="flex gap-3">
-                  <select
-                    className="flex-1 bg-gray-50 border border-gray-200 rounded-xl text-sm
-                      font-semibold px-3 py-2.5 focus:ring-2 focus:ring-brand-500 outline-none cursor-pointer"
-                    value={status}
-                    onChange={(e) => { setStatus(e.target.value); setSaveError(""); }}
-                  >
-                    <option value="pending">Pending</option>
-                    <option value="matched">Matched</option>
-                    <option value="allocated">Allocated</option>
-                    <option value="completed">Completed</option>
-                  </select>
-                  <Button size="sm" loading={saving} onClick={handleStatusSave} variant={saved ? "secondary" : "primary"} className="shrink-0">
-                    {saved ? <><Check size={14} /> Saved</> : "Save"}
-                  </Button>
-                </div>
-              </div>
-
-              {/* Reject — deliberate destructive action, separated visually */}
-              {student.status !== "rejected" && student.status !== "completed" && (
-                <div className="pt-3 border-t border-red-100">
-                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">
-                    Danger Zone
-                  </p>
-                  {!confirmReject ? (
-                    <button
-                      onClick={() => setConfirmReject(true)}
-                      className="flex items-center gap-2 px-4 py-2.5 text-sm font-black text-red-600
-                        border border-red-200 bg-red-50 rounded-xl hover:bg-red-100
-                        hover:border-red-300 transition-all cursor-pointer w-full justify-center"
-                    >
-                      <AlertCircle size={15} /> Reject Student Application
-                    </button>
-                  ) : (
-                    <div className="p-4 bg-red-50 border border-red-200 rounded-2xl space-y-3">
-                      <p className="text-sm font-bold text-red-800">
-                        Are you sure? This will remove the student from the matching pool and notify them.
-                      </p>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={handleReject}
-                          disabled={saving}
-                          className="flex-1 py-2.5 text-xs font-black text-white bg-red-600
-                            hover:bg-red-700 rounded-xl transition-colors cursor-pointer
-                            disabled:opacity-50"
-                        >
-                          {saving ? "Rejecting…" : "Yes, Reject Student"}
-                        </button>
-                        <button
-                          onClick={() => setConfirmReject(false)}
-                          className="flex-1 py-2.5 text-xs font-black text-gray-600
-                            bg-white border border-gray-200 rounded-xl hover:bg-gray-50
-                            transition-colors cursor-pointer"
-                        >
-                          Cancel
-                        </button>
-                      </div>
+                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+                    <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">End Date</span>
+                    <span className="text-sm font-black text-brand-900">{formatDate(placement.end_date)}</span>
+                  </div>
+                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+                    <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Duration</span>
+                    <span className="text-sm font-black text-brand-900">{placement.duration_weeks} Weeks</span>
+                  </div>
+                  {remaining !== null && (
+                    <div className={`flex items-center justify-between p-3 rounded-xl ${
+                      remaining > 14 ? "bg-green-50" : remaining > 7 ? "bg-amber-50" : "bg-red-50"
+                    }`}>
+                      <span className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+                        <Clock size={11} /> Days Remaining
+                      </span>
+                      <span className={`text-sm font-black ${
+                        remaining > 14 ? "text-green-700" : remaining > 7 ? "text-amber-700" : "text-red-700"
+                      }`}>
+                        {remaining > 0 ? `${remaining} days` : "Completed"}
+                      </span>
                     </div>
                   )}
                 </div>
-              )}
 
-              {student.status === "rejected" && (
-                <div className="p-4 bg-red-50 border border-red-200 rounded-2xl flex items-center gap-3">
-                  <AlertCircle size={16} className="text-red-500 shrink-0" />
-                  <p className="text-sm font-bold text-red-700">This student has been rejected.</p>
-                  <button
-                    onClick={() => { setStatus("pending"); handleStatusSave(); }}
-                    className="ml-auto text-xs font-black text-brand-600 hover:underline cursor-pointer"
-                  >
-                    Reinstate
-                  </button>
+                {/* Location */}
+                {org?.location && (
+                  <div className="flex items-center gap-2 text-sm text-gray-600 font-medium mt-2">
+                    <MapPin size={14} className="text-brand-500 shrink-0" />
+                    {org.location}, Botswana
+                  </div>
+                )}
+              </div>
+
+              {/* ── Supervisors ── */}
+              <div className="space-y-4">
+                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                  <UserCheck size={13} className="text-brand-600" /> Your Supervisors
+                </h4>
+
+                {/* Industrial supervisor */}
+                <div className="p-4 bg-brand-50 border border-brand-100 rounded-2xl space-y-2">
+                  <p className="text-[9px] font-black text-brand-500 uppercase tracking-widest">
+                    Industrial Supervisor
+                  </p>
+                  {placement.industrial_supervisor_name ? (
+                    <>
+                      <p className="font-bold text-brand-900 text-sm">
+                        {placement.industrial_supervisor_name}
+                      </p>
+                      {placement.industrial_supervisor_email && (
+                        <a
+                          href={`mailto:${placement.industrial_supervisor_email}`}
+                          className="flex items-center gap-1.5 text-xs text-brand-600 font-bold hover:underline"
+                        >
+                          <Mail size={11} /> {placement.industrial_supervisor_email}
+                        </a>
+                      )}
+                      {org?.contact_phone && (
+                        <a
+                          href={`tel:${org.contact_phone}`}
+                          className="flex items-center gap-1.5 text-xs text-brand-600 font-bold hover:underline"
+                        >
+                          <Phone size={11} /> {org.contact_phone}
+                        </a>
+                      )}
+                    </>
+                  ) : (
+                    <p className="text-xs text-gray-400 italic">Not yet assigned</p>
+                  )}
+                </div>
+
+                {/* University supervisor */}
+                <div className="p-4 bg-gray-50 border border-gray-100 rounded-2xl space-y-2">
+                  <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                    University Supervisor (UB)
+                  </p>
+                  {placement.university_supervisor_name ? (
+                    <>
+                      <p className="font-bold text-brand-900 text-sm">
+                        {placement.university_supervisor_name}
+                      </p>
+                      {placement.university_supervisor_email && (
+                        <a
+                          href={`mailto:${placement.university_supervisor_email}`}
+                          className="flex items-center gap-1.5 text-xs text-brand-600 font-bold hover:underline"
+                        >
+                          <Mail size={11} /> {placement.university_supervisor_email}
+                        </a>
+                      )}
+                    </>
+                  ) : (
+                    <p className="text-xs text-gray-400 italic">
+                      Pending coordinator assignment
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* ── Not yet placed — show matching nudge ── */}
+      {!isPlaced && student?.status === "pending" && (
+        <div className="bg-amber-50 border border-amber-100 rounded-2xl p-5 flex items-start gap-4">
+          <Briefcase size={18} className="text-amber-500 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-bold text-amber-900 text-sm">Awaiting Placement</p>
+            <p className="text-xs text-amber-700 mt-1 leading-relaxed">
+              Your profile is in the matching queue. The coordinator will allocate you to an organisation.
+              Make sure your profile and preferences are complete to improve your matching score.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* ── Action Center ── */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 md:gap-8">
+
+        {/* Profile Strength & Preferences */}
+        <div className="xl:col-span-2 card p-6 md:p-8 bg-white border border-gray-100 rounded-[1.5rem] md:rounded-[2.5rem] shadow-sm space-y-8">
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+              <div>
+                <h3 className="text-lg font-display font-bold text-brand-900">Application Readiness</h3>
+                <p className="text-xs text-gray-500 font-medium">Profile completeness and matching intent</p>
+              </div>
+              <span className="text-2xl font-black text-brand-600">{progress}%</span>
+            </div>
+
+            <div className="w-full bg-gray-100 h-2.5 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-brand-600 transition-all duration-1000 ease-in-out"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <DocStatus label="CV Document"      uploaded={!!student?.cv_url} />
+              <DocStatus label="Transcript"       uploaded={!!student?.transcript_url} />
+              <DocStatus label="Matching Intent"  uploaded={preferences?.preferred_roles?.length > 0} />
+              <DocStatus label="Target Locations" uploaded={preferences?.preferred_locations?.length > 0} />
+            </div>
+          </div>
+
+          {/* Skills */}
+          <div className="pt-6 border-t border-gray-50">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Target size={16} className="text-brand-600" />
+                <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Your Expertise</h4>
+              </div>
+              <button
+                onClick={() => navigate("/student/preferences")}
+                className="text-[10px] font-bold text-brand-600 hover:underline cursor-pointer"
+              >
+                Edit Preferences
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {preferences?.technical_skills?.length > 0 ? (
+                preferences.technical_skills.map((skill, index) => (
+                  <span key={index} className="px-3 py-1.5 bg-brand-50 text-brand-700 rounded-lg font-bold text-[9px] md:text-[10px] border border-brand-100">
+                    {skill}
+                  </span>
+                ))
+              ) : (
+                <div className="flex flex-col gap-2">
+                  <p className="text-[10px] text-gray-400 italic">No expertise added to your matching intent.</p>
+                  <Button size="sm" variant="ghost" onClick={() => navigate("/student/preferences")}>
+                    Add Skills Now
+                  </Button>
                 </div>
               )}
             </div>
-          </Section>
+          </div>
 
+          {!isComplete && (
+            <div className="p-4 md:p-5 bg-orange-50 rounded-2xl border border-orange-100 flex items-start gap-4">
+              <FileWarning size={18} className="text-orange-500 shrink-0 mt-0.5" />
+              <p className="text-[11px] md:text-xs text-orange-900 leading-relaxed font-medium">
+                Your portal is not fully synced. Complete your Profile and Career Preferences to increase your chances of placement.
+              </p>
+            </div>
+          )}
         </div>
-      </main>
 
-      {/* Footer */}
-      <footer className="bg-white border-t border-gray-100 px-4 sm:px-8 py-4 flex gap-3 justify-end">
-        <Button variant="ghost" onClick={onClose}>Close</Button>
-        <Button
-          size="lg"
-          onClick={() => { onClose(); navigate("/coordinator/matching"); }}
-          disabled={isPlaced}
-        >
-          <Zap size={16} fill="currentColor" />
-          {isPlaced ? "Already Matched" : "Match Student"}
-        </Button>
-      </footer>
+        {/* Resources Sidebar */}
+        <div className="p-6 md:p-8 bg-gray-50 border border-gray-100 rounded-[1.5rem] md:rounded-[2.5rem] flex flex-col gap-6">
+          <div className="space-y-3">
+            <h3 className="text-xl md:text-2xl font-display font-bold text-brand-900">Resources</h3>
+            <p className="text-xs md:text-sm text-gray-500 leading-relaxed font-medium">
+              UB departmental documents for your attachment phase.
+            </p>
+          </div>
+          <div className="space-y-2 md:space-y-3">
+            <ResourceButton label="Attachment Handbook" />
+            <ResourceButton label="Logbook Template" />
+          </div>
+        </div>
+      </div>
     </div>
+  );
+}
+
+function DocStatus({ label, uploaded }) {
+  return (
+    <div className="flex items-center gap-3 px-4 py-2.5 bg-gray-50 rounded-xl border border-gray-100 transition-colors">
+      {uploaded
+        ? <CheckCircle size={14} className="text-green-500" />
+        : <FileWarning size={14} className="text-gray-300" />
+      }
+      <span className={`text-[9px] md:text-[10px] font-bold uppercase tracking-wider ${uploaded ? "text-gray-800" : "text-gray-400"}`}>
+        {label}
+      </span>
+    </div>
+  );
+}
+
+function ResourceButton({ label }) {
+  return (
+    <button className="w-full flex items-center justify-between p-4 bg-white rounded-xl border border-gray-100 hover:border-brand-200 transition-all group cursor-pointer text-left">
+      <span className="text-[11px] md:text-xs font-bold text-gray-700">{label}</span>
+      <ExternalLink size={14} className="text-gray-400 group-hover:text-brand-600" />
+    </button>
   );
 }
