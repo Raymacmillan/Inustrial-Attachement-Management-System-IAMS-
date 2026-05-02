@@ -224,7 +224,7 @@ export const supervisorService = {
    * Approve a submitted logbook week (industrial supervisor).
    * Creates the digital stamp and updates week status.
    */
-  approveWeek: async (weekId, supervisorUserId, signerName, signerTitle) => {
+  approveWeek: async (weekId, supervisorUserId, signerName, signerTitle, comments = null) => {
     const { error: sigError } = await supabase
       .from("logbook_signatures")
       .insert([{
@@ -241,11 +241,13 @@ export const supervisorService = {
     const { error } = await supabase
       .from("logbook_weeks")
       .update({
-        status:           "approved",
-        stamped_by_name:  signerName,
-        stamped_by_title: signerTitle,
-        approved_at:      new Date().toISOString(),
-        updated_at:       new Date().toISOString(),
+        status:              "approved",
+        stamped_by_name:     signerName,
+        stamped_by_title:    signerTitle,
+        approved_at:         new Date().toISOString(),
+        updated_at:          new Date().toISOString(),
+        // Save optional comments — supervisor can leave praise or notes on approval
+        ...(comments ? { supervisor_comments: comments } : {}),
       })
       .eq("id", weekId);
 
