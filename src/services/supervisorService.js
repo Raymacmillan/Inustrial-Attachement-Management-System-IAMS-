@@ -442,11 +442,18 @@ export const supervisorService = {
 
     if (error) throw error;
 
-    // TODO (Release 3 / notification sprint):
-    // After a visit is scheduled, trigger an email to the student notifying
-    // them of the upcoming visit date and any notes from the supervisor.
-    // Suggested edge function: send-visit-notification
-    // Payload: { placementId, visitNumber, visitDate, supervisorName, comments }
+    // Notify student of the scheduled visit via email
+    const { error: notifyError } = await supabase.functions.invoke("send-visit-notification", {
+      body: {
+        placementId,
+        visitNumber,
+        visitDate:      visit_date,
+        supervisorId,
+        comments,
+      },
+    });
+    // Non-fatal — assessment is saved even if notification fails
+    if (notifyError) console.warn("Visit notification email failed:", notifyError.message);
 
     return data;
   },
