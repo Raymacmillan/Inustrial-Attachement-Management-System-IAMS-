@@ -85,6 +85,7 @@ export default function StudentAuditModal({ isOpen, onClose, student, onUpdate }
   const [uniEmail,         setUniEmail]          = useState("");
   const [savingUni,        setSavingUni]         = useState(false);
   const [uniSaved,         setUniSaved]          = useState(false);
+  const [confirmReject,    setConfirmReject]      = useState(false);
 
   useEffect(() => {
     if (!student) return;
@@ -94,6 +95,7 @@ export default function StudentAuditModal({ isOpen, onClose, student, onUpdate }
     setDatesSaved(false);
     setIndSaved(false);
     setUniSaved(false);
+    setConfirmReject(false);
     setPlacement(null);
     setSelectedSupId("");
     setManualOverride(false);
@@ -204,6 +206,21 @@ export default function StudentAuditModal({ isOpen, onClose, student, onUpdate }
       setSaveError(err.message || "Failed to save university supervisor.");
     } finally {
       setSavingUni(false);
+    }
+  };
+
+  const handleReject = async () => {
+    setSaving(true);
+    setSaveError("");
+    try {
+      await coordinatorService.updateStudentStatus(student.id, "rejected");
+      if (onUpdate) onUpdate(student.id, "rejected");
+      setStatus("rejected");
+      setConfirmReject(false);
+    } catch (err) {
+      setSaveError(err.message || "Failed to reject student.");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -526,26 +543,85 @@ export default function StudentAuditModal({ isOpen, onClose, student, onUpdate }
 
           {/* Coordinator actions */}
           <Section title="Coordinator Actions" icon={Edit3} defaultOpen>
-            <div className="space-y-4">
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-2">
-                Update Attachment Status
-              </label>
-              <div className="flex gap-3">
-                <select
-                  className="flex-1 bg-gray-50 border border-gray-200 rounded-xl text-sm
-                    font-semibold px-3 py-2.5 focus:ring-2 focus:ring-brand-500 outline-none cursor-pointer"
-                  value={status}
-                  onChange={(e) => { setStatus(e.target.value); setSaveError(""); }}
-                >
-                  <option value="pending">Pending</option>
-                  <option value="matched">Matched</option>
-                  <option value="allocated">Allocated</option>
-                  <option value="completed">Completed</option>
-                </select>
-                <Button size="sm" loading={saving} onClick={handleStatusSave} variant={saved ? "secondary" : "primary"} className="shrink-0">
-                  {saved ? <><Check size={14} /> Saved</> : "Save"}
-                </Button>
+            <div className="space-y-5">
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">
+                  Update Attachment Status
+                </label>
+                <div className="flex gap-3">
+                  <select
+                    className="flex-1 bg-gray-50 border border-gray-200 rounded-xl text-sm
+                      font-semibold px-3 py-2.5 focus:ring-2 focus:ring-brand-500 outline-none cursor-pointer"
+                    value={status}
+                    onChange={(e) => { setStatus(e.target.value); setSaveError(""); }}
+                  >
+                    <option value="pending">Pending</option>
+                    <option value="matched">Matched</option>
+                    <option value="allocated">Allocated</option>
+                    <option value="completed">Completed</option>
+                  </select>
+                  <Button size="sm" loading={saving} onClick={handleStatusSave} variant={saved ? "secondary" : "primary"} className="shrink-0">
+                    {saved ? <><Check size={14} /> Saved</> : "Save"}
+                  </Button>
+                </div>
               </div>
+
+              {/* Reject — deliberate destructive action, separated visually */}
+              {student.status !== "rejected" && student.status !== "completed" && (
+                <div className="pt-3 border-t border-red-100">
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">
+                    Danger Zone
+                  </p>
+                  {!confirmReject ? (
+                    <button
+                      onClick={() => setConfirmReject(true)}
+                      className="flex items-center gap-2 px-4 py-2.5 text-sm font-black text-red-600
+                        border border-red-200 bg-red-50 rounded-xl hover:bg-red-100
+                        hover:border-red-300 transition-all cursor-pointer w-full justify-center"
+                    >
+                      <AlertCircle size={15} /> Reject Student Application
+                    </button>
+                  ) : (
+                    <div className="p-4 bg-red-50 border border-red-200 rounded-2xl space-y-3">
+                      <p className="text-sm font-bold text-red-800">
+                        Are you sure? This will remove the student from the matching pool and notify them.
+                      </p>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={handleReject}
+                          disabled={saving}
+                          className="flex-1 py-2.5 text-xs font-black text-white bg-red-600
+                            hover:bg-red-700 rounded-xl transition-colors cursor-pointer
+                            disabled:opacity-50"
+                        >
+                          {saving ? "Rejecting…" : "Yes, Reject Student"}
+                        </button>
+                        <button
+                          onClick={() => setConfirmReject(false)}
+                          className="flex-1 py-2.5 text-xs font-black text-gray-600
+                            bg-white border border-gray-200 rounded-xl hover:bg-gray-50
+                            transition-colors cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {student.status === "rejected" && (
+                <div className="p-4 bg-red-50 border border-red-200 rounded-2xl flex items-center gap-3">
+                  <AlertCircle size={16} className="text-red-500 shrink-0" />
+                  <p className="text-sm font-bold text-red-700">This student has been rejected.</p>
+                  <button
+                    onClick={() => { setStatus("pending"); handleStatusSave(); }}
+                    className="ml-auto text-xs font-black text-brand-600 hover:underline cursor-pointer"
+                  >
+                    Reinstate
+                  </button>
+                </div>
+              )}
             </div>
           </Section>
 
