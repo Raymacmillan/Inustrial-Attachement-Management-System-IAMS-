@@ -2,22 +2,23 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { UserAuth } from "../../context/AuthContext";
 import * as studentService from "../../services/studentService";
+import { supabase } from "../../lib/supabaseClient";
 import Button from "../../components/ui/Button";
 import StatCard from "../../components/ui/StatCard";
 import {
-  User, Briefcase, ClipboardList, GraduationCap, ArrowRight,
-  CheckCircle, FileWarning, LayoutDashboard, ExternalLink, Target,
+  Briefcase, CheckCircle, FileWarning, LayoutDashboard, ExternalLink, Target,
   Building2, MapPin, Calendar, Clock, UserCheck, Mail, Phone,
-  BookOpen, Zap,
+  Zap, Bell, GraduationCap, ArrowRight,
 } from "lucide-react";
 
 export default function StudentDashboard() {
   const { user }  = UserAuth();
   const navigate  = useNavigate();
-  const [loading, setLoading]       = useState(true);
-  const [student, setStudent]       = useState(null);
-  const [preferences, setPreferences] = useState(null);
-  const [placement, setPlacement]   = useState(null);
+  const [loading,        setLoading]        = useState(true);
+  const [student,        setStudent]        = useState(null);
+  const [preferences,    setPreferences]    = useState(null);
+  const [placement,      setPlacement]      = useState(null);
+  const [scheduledVisits, setScheduledVisits] = useState([]);
 
   useEffect(() => {
     const fetchPortalData = async () => {
@@ -30,6 +31,16 @@ export default function StudentDashboard() {
         setStudent(profileData);
         setPreferences(prefData);
         setPlacement(placementData);
+
+        // Fetch scheduled visits for this placement
+        if (placementData?.id) {
+          const { data: visits } = await supabase
+            .from("visit_assessments")
+            .select("visit_number, visit_date, status, comments")
+            .eq("placement_id", placementData.id)
+            .order("visit_number", { ascending: true });
+          setScheduledVisits(visits || []);
+        }
       } catch (err) {
         console.error("Dashboard Sync Error:", err);
       } finally {
@@ -46,8 +57,8 @@ export default function StudentDashboard() {
     if (student.avatar_url)     p += 15;
     if (student.cv_url)         p += 15;
     if (student.transcript_url) p += 15;
-    if (preferences?.technical_skills?.length > 0)   p += 20;
-    if (preferences?.preferred_roles?.length > 0)    p += 10;
+    if (preferences?.technical_skills?.length > 0)    p += 20;
+    if (preferences?.preferred_roles?.length > 0)     p += 10;
     if (preferences?.preferred_locations?.length > 0) p += 10;
     return p;
   };
@@ -60,12 +71,12 @@ export default function StudentDashboard() {
     </div>
   );
 
-  const progress    = calculateProgress();
-  const isComplete  = progress === 100;
-  const isPlaced    = Boolean(placement);
-  const org         = placement?.organization_profiles;
+  const progress   = calculateProgress();
+  const isComplete = progress === 100;
+  const isPlaced   = Boolean(placement);
+  const org        = placement?.organization_profiles;
+  const today      = new Date().toISOString().split("T")[0];
 
-  // Format a date string to a readable format e.g. "09 Apr 2026"
   const formatDate = (dateStr) => {
     if (!dateStr) return "—";
     return new Date(dateStr).toLocaleDateString("en-GB", {
@@ -73,7 +84,13 @@ export default function StudentDashboard() {
     });
   };
 
-  // Calculate days remaining until end date
+  const formatDateLong = (dateStr) => {
+    if (!dateStr) return "—";
+    return new Date(dateStr).toLocaleDateString("en-GB", {
+      weekday: "short", day: "numeric", month: "short", year: "numeric",
+    });
+  };
+
   const daysRemaining = () => {
     if (!placement?.end_date) return null;
     const diff = new Date(placement.end_date) - new Date();
@@ -140,17 +157,15 @@ export default function StudentDashboard() {
               >
                 <Mail size={13} /> Contact Coordinator
               </a>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => navigate("/student/preferences")}
-              >
+              <Button size="sm" variant="ghost" onClick={() => navigate("/student/preferences")}>
                 Update Preferences
               </Button>
             </div>
           </div>
         </section>
       )}
+
+      {/* ── Stat cards ── */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-6">
         <StatCard
           title="Placement Status"
@@ -172,7 +187,7 @@ export default function StudentDashboard() {
         />
       </div>
 
-      {/* ── Placement Card — only shown when student is placed ── */}
+      {/* ── Placement Card ── */}
       {isPlaced && (
         <section className="space-y-4">
           <div className="flex items-center gap-2 px-1">
@@ -250,7 +265,6 @@ export default function StudentDashboard() {
                   )}
                 </div>
 
-                {/* Location */}
                 {org?.location && (
                   <div className="flex items-center gap-2 text-sm text-gray-600 font-medium mt-2">
                     <MapPin size={14} className="text-brand-500 shrink-0" />
@@ -259,7 +273,7 @@ export default function StudentDashboard() {
                 )}
               </div>
 
-              {/* ── Supervisors ── */}
+              {/* ── Supervisors + Scheduled visits ── */}
               <div className="space-y-4">
                 <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
                   <UserCheck size={13} className="text-brand-600" /> Your Supervisors
@@ -322,6 +336,69 @@ export default function StudentDashboard() {
                     </p>
                   )}
                 </div>
+
+                {/* ── Scheduled visit notifications ── */}
+                {scheduledVisits.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
+                      <Bell size={10} className="text-brand-500" /> Supervisor Visits
+                    </p>
+                    {scheduledVisits.map((visit) => {
+                      const isPast   = visit.visit_date < today;
+                      const isToday  = visit.visit_date === today;
+                      return (
+                        <div
+                          key={visit.visit_number}
+                          className={`p-3 rounded-xl border flex items-start gap-3
+                            ${isToday  ? "bg-amber-50 border-amber-200"
+                            : isPast   ? "bg-gray-50 border-gray-100"
+                            :            "bg-brand-50 border-brand-100"}`}
+                        >
+                          <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0
+                            ${isToday ? "bg-amber-100" : isPast ? "bg-gray-100" : "bg-brand-100"}`}>
+                            <Calendar size={12} className={
+                              isToday ? "text-amber-600" : isPast ? "text-gray-400" : "text-brand-600"
+                            } />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className={`text-xs font-black
+                                ${isToday ? "text-amber-800" : isPast ? "text-gray-500" : "text-brand-900"}`}>
+                                Visit {visit.visit_number} — {formatDateLong(visit.visit_date)}
+                              </p>
+                              <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-wide shrink-0
+                                ${visit.status === "submitted" ? "bg-green-100 text-green-700"
+                                : isToday ? "bg-amber-100 text-amber-700"
+                                : isPast  ? "bg-gray-100 text-gray-500"
+                                :           "bg-brand-100 text-brand-600"}`}>
+                                {visit.status === "submitted" ? "Assessed"
+                                : isToday ? "Today"
+                                : isPast  ? "Passed"
+                                :           "Upcoming"}
+                              </span>
+                            </div>
+                            {visit.comments && (
+                              <p className="text-[10px] text-gray-500 mt-0.5 leading-relaxed line-clamp-2">
+                                {visit.comments}
+                              </p>
+                            )}
+                            {isToday && (
+                              <p className="text-[10px] font-bold text-amber-700 mt-0.5">
+                                Your supervisor visits today — ensure your logbook is up to date.
+                              </p>
+                            )}
+                            {!isPast && !isToday && (
+                              <p className="text-[10px] text-brand-500 mt-0.5">
+                                Ensure your logbook is complete before this visit.
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
               </div>
             </div>
           </div>
