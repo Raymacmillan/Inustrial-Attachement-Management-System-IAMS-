@@ -408,8 +408,38 @@ export const supervisorService = {
   },
 
   /**
-   * Submit or update a visit assessment for a student placement.
-   * University supervisors conduct 2 visits per student.
+   * Schedule a visit — saves the date and notifies the student.
+   * Scores are NOT required at this stage (status = "pending").
+   * The supervisor fills in scores later via submitVisitAssessment.
+   */
+  scheduleVisit: async (placementId, supervisorId, visitNumber, visitDate, notes = "") => {
+    const { data, error } = await supabase
+      .from("visit_assessments")
+      .upsert([{
+        placement_id:             placementId,
+        university_supervisor_id: supervisorId,
+        visit_number:             visitNumber,
+        visit_date:               visitDate,
+        comments:                 notes,
+        status:                   "pending",
+        updated_at:               new Date().toISOString(),
+      }], { onConflict: "placement_id,visit_number" })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // Notify student — non-fatal
+    supabase.functions.invoke("send-visit-notification", {
+      body: { placementId, visitNumber, visitDate, supervisorId, comments: notes },
+    }).catch((e) => console.warn("Visit notification failed:", e.message));
+
+    return data;
+  },
+
+  /**
+   * Submit visit assessment scores (status = "submitted").
+   * Called after the visit has taken place.
    */
   submitVisitAssessment: async (placementId, supervisorId, visitNumber, assessmentData) => {
     const {
