@@ -1,7 +1,8 @@
 import { Menu } from 'lucide-react';
 import { useAvatar } from "../../context/AvatarContext";
+import NotificationBell from "../ui/NotificationBell";
 
-export default function Navbar({ onMenuClick }) {
+export default function Navbar({ onMenuClick, notifications = [], onMarkRead }) {
   const { avatarUrl, initials } = useAvatar() || {};
 
   return (
@@ -17,7 +18,9 @@ export default function Navbar({ onMenuClick }) {
         Industrial Attachment Portal
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3">
+        <NotificationBell notifications={notifications} onMarkRead={onMarkRead} />
+
         <div className="h-10 w-10 rounded-full border-2 border-brand-50 bg-brand-100 overflow-hidden flex items-center justify-center shadow-sm shrink-0">
           {avatarUrl ? (
             <img
