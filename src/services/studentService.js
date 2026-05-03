@@ -158,8 +158,79 @@ export const getStudentPreferences = async (studentId) => {
 };
 
 /**
- * @description Upserts student internship intent (creates or updates)
+ * @description Fetches all unread notification items for the student:
+ *   - Upcoming scheduled visits (status = 'pending', date >= today)
+ *   - Logbook weeks needing revision (status = 'action_needed')
+ * Filters out any previously marked-as-read notifications.
+ * Single source of truth — NotificationBell receives this as a prop.
  */
+export const getStudentNotifications = async (studentId, placementId) => {
+  if (!studentId || !placementId) return [];
+
+  const today = new Date().toISOString().split("T")[0];
+
+  const [visitsRes, logbookRes, readsRes] = await Promise.all([
+    supabase
+      .from("visit_assessments")
+      .select("visit_number, visit_date, status, comments")
+      .eq("placement_id", placementId)
+      .gte("visit_date", today)
+      .eq("status", "pending"),
+    supabase
+      .from("logbook_weeks")
+      .select("id, week_number, status, supervisor_comments")
+      .eq("student_id", studentId)
+      .eq("status", "action_needed"),
+    supabase
+      .from("notification_reads")
+      .select("type, ref_id")
+      .eq("student_id", studentId),
+  ]);
+
+  // Build a Set of already-read ref_ids for O(1) lookup
+  const readSet = new Set(
+    (readsRes.data || []).map((r) => `${r.type}:${r.ref_id}`)
+  );
+
+  const visitItems = (visitsRes.data || [])
+    .filter((v) => !readSet.has(`visit:${placementId}-${v.visit_number}`))
+    .map((v) => ({
+      type:   "visit",
+      refId:  `${placementId}-${v.visit_number}`,
+      label:  `Visit ${v.visit_number} scheduled`,
+      detail: new Date(v.visit_date + "T00:00:00").toLocaleDateString("en-GB", {
+        weekday: "long", day: "numeric", month: "short",
+      }),
+    }));
+
+  const logbookItems = (logbookRes.data || [])
+    .filter((w) => !readSet.has(`logbook:${w.id}`))
+    .map((w) => ({
+      type:   "logbook",
+      refId:  w.id,
+      label:  `Week ${w.week_number} needs revision`,
+      detail: w.supervisor_comments
+        ? w.supervisor_comments.slice(0, 55) + (w.supervisor_comments.length > 55 ? "…" : "")
+        : "Supervisor requested changes — open your logbook.",
+    }));
+
+  return [...visitItems, ...logbookItems];
+};
+
+/**
+ * @description Marks a single notification as read by inserting into notification_reads.
+ * Uses upsert so re-reading the same notification is idempotent.
+ */
+export const markNotificationRead = async (studentId, type, refId) => {
+  const { error } = await supabase
+    .from("notification_reads")
+    .upsert(
+      { student_id: studentId, type, ref_id: refId },
+      { onConflict: "student_id,type,ref_id" }
+    );
+  if (error) throw error;
+  return true;
+};
 export const updateStudentPreferences = async (studentId, preferences) => {
   const cleanData = {
     student_id: studentId,
