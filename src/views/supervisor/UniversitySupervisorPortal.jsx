@@ -12,6 +12,7 @@ import StatusBadge from "../../components/ui/StatusBadge";
 import DigitalStamp from "../../components/ui/DigitalStamp";
 import EmptyState from "../../components/ui/EmptyState";
 import Textarea from "../../components/ui/Textarea";
+import ConfirmModal from "../../components/ui/ConfirmModal";
 
 // -- Score input (1–10) --------------------------------------------------------
 function ScoreInput({ label, value, onChange, disabled }) {
@@ -226,7 +227,7 @@ function WeekViewModal({ weekId, studentName, onClose }) {
 }
 
 // -- Visit assessment panel ----------------------------------------------------
-function VisitAssessmentPanel({ placementId, supervisorId, studentName, onClose }) {
+function VisitAssessmentPanel({ placementId, supervisorId, studentName, placement, onClose }) {
   const CRITERIA = [
     { key: "punctuality_score",      label: "Punctuality & Attendance" },
     { key: "professionalism_score",  label: "Professionalism" },
@@ -236,34 +237,43 @@ function VisitAssessmentPanel({ placementId, supervisorId, studentName, onClose 
   ];
 
   const emptyForm = {
-    visit_date:             "",
-    punctuality_score:      null,
-    professionalism_score:  null,
-    technical_score:        null,
-    communication_score:    null,
-    overall_score:          null,
-    comments:               "",
+    visit_date: "", punctuality_score: null, professionalism_score: null,
+    technical_score: null, communication_score: null, overall_score: null, comments: "",
   };
 
   const [activeVisit, setActiveVisit] = useState(1);
   const [forms,       setForms]       = useState({ 1: { ...emptyForm }, 2: { ...emptyForm } });
-  const [submitted,   setSubmitted]   = useState({ 1: false, 2: false });
+  const [statuses,    setStatuses]    = useState({ 1: null, 2: null }); // null | "pending" | "submitted"
   const [loading,     setLoading]     = useState(true);
   const [saving,      setSaving]      = useState(false);
+  const [schedNotes,  setSchedNotes]  = useState({ 1: "", 2: "" });
+  const [schedDate,   setSchedDate]   = useState({ 1: "", 2: "" });
   const [error,       setError]       = useState("");
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  // Date bounds from placement
+  const minDate = placement?.start_date || "";
+  const maxDate = placement?.end_date   || "";
+  const today   = new Date().toISOString().split("T")[0];
 
   useEffect(() => {
     supervisorService.getVisitAssessments(placementId).then((existing) => {
-      const updated = { 1: { ...emptyForm }, 2: { ...emptyForm } };
-      const done    = { 1: false, 2: false };
+      const updated  = { 1: { ...emptyForm }, 2: { ...emptyForm } };
+      const newStat  = { 1: null, 2: null };
+      const newNotes = { 1: "", 2: "" };
+      const newDates = { 1: "", 2: "" };
       (existing || []).forEach((v) => {
         if (v.visit_number === 1 || v.visit_number === 2) {
-          updated[v.visit_number] = v;
-          done[v.visit_number]    = v.status === "submitted";
+          updated[v.visit_number]  = v;
+          newStat[v.visit_number]  = v.status;
+          newNotes[v.visit_number] = v.comments || "";
+          newDates[v.visit_number] = v.visit_date || "";
         }
       });
       setForms(updated);
-      setSubmitted(done);
+      setStatuses(newStat);
+      setSchedNotes(newNotes);
+      setSchedDate(newDates);
       setLoading(false);
     }).catch(() => setLoading(false));
   }, [placementId]);
@@ -271,17 +281,29 @@ function VisitAssessmentPanel({ placementId, supervisorId, studentName, onClose 
   const setScore = (key) => (val) =>
     setForms((f) => ({ ...f, [activeVisit]: { ...f[activeVisit], [key]: val } }));
 
-  const handleSubmit = async () => {
-    const form    = forms[activeVisit];
-    const missing = CRITERIA.filter((c) => !form[c.key]);
-    if (!form.visit_date) { setError("Please set the visit date."); return; }
-    if (missing.length)   { setError(`Score all criteria. Missing: ${missing.map(c => c.label).join(", ")}`); return; }
+  // Validate then open confirmation modal
+  const handleScheduleClick = () => {
+    const date = schedDate[activeVisit];
+    setError("");
+    if (!date) { setError("Please select a visit date."); return; }
+    if (date < today) { setError("Visit date must be today or in the future."); return; }
+    if (minDate && date < minDate) { setError(`Visit must be within placement period (from ${minDate}).`); return; }
+    if (maxDate && date > maxDate) { setError(`Visit must be within placement period (until ${maxDate}).`); return; }
+    setConfirmOpen(true);
+  };
 
+  // Actual save — called after confirmation
+  const handleSchedule = async () => {
+    setConfirmOpen(false);
     setSaving(true);
     setError("");
+    const date = schedDate[activeVisit];
     try {
-      await supervisorService.submitVisitAssessment(placementId, supervisorId, activeVisit, form);
-      setSubmitted((s) => ({ ...s, [activeVisit]: true }));
+      await supervisorService.scheduleVisit(
+        placementId, supervisorId, activeVisit, date, schedNotes[activeVisit]
+      );
+      setStatuses((s) => ({ ...s, [activeVisit]: "pending" }));
+      setForms((f) => ({ ...f, [activeVisit]: { ...f[activeVisit], visit_date: date } }));
     } catch (e) {
       setError(e.message);
     } finally {
@@ -289,8 +311,39 @@ function VisitAssessmentPanel({ placementId, supervisorId, studentName, onClose 
     }
   };
 
-  const form      = forms[activeVisit];
-  const isDone    = submitted[activeVisit];
+  // Phase 2 — Submit scores after the visit
+  const handleSubmitScores = async () => {
+    const form    = forms[activeVisit];
+    const missing = CRITERIA.filter((c) => !form[c.key]);
+    if (missing.length) {
+      setError(`Score all criteria. Missing: ${missing.map(c => c.label).join(", ")}`);
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      await supervisorService.submitVisitAssessment(placementId, supervisorId, activeVisit, {
+        ...form,
+        visit_date: schedDate[activeVisit] || form.visit_date,
+      });
+      setStatuses((s) => ({ ...s, [activeVisit]: "submitted" }));
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const form         = forms[activeVisit];
+  const status       = statuses[activeVisit];
+  const isScheduled  = status === "pending" || status === "submitted";
+  const isAssessed   = status === "submitted";
+  // Assessment only unlocks the day of or after the visit
+  const visitPassed  = schedDate[activeVisit] && schedDate[activeVisit] <= today;
+
+  const fmtDate = (d) => d
+    ? new Date(d).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })
+    : "";
 
   return (
     <div
@@ -304,9 +357,11 @@ function VisitAssessmentPanel({ placementId, supervisorId, studentName, onClose 
         <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-100">
           <div>
             <h2 className="font-display text-xl font-bold text-brand-900">
-              Visit Assessments — {studentName}
+              Site Visits — {studentName}
             </h2>
-            <p className="text-sm text-gray-400 mt-0.5">Score each scheduled site visit</p>
+            <p className="text-sm text-gray-400 mt-0.5">
+              Schedule visits and record assessments · Placement: {fmtDate(minDate)} – {fmtDate(maxDate)}
+            </p>
           </div>
           <button onClick={onClose} className="p-2 rounded-xl text-gray-400 hover:bg-gray-100
             hover:text-brand-900 transition-colors cursor-pointer">
@@ -322,13 +377,11 @@ function VisitAssessmentPanel({ placementId, supervisorId, studentName, onClose 
               onClick={() => { setActiveVisit(v); setError(""); }}
               className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-black
                 transition-all cursor-pointer
-                ${activeVisit === v
-                  ? "bg-brand-900 text-white"
-                  : "bg-gray-100 text-gray-500 hover:bg-gray-200"
-                }`}
+                ${activeVisit === v ? "bg-brand-900 text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}
             >
               Visit {v}
-              {submitted[v] && <CheckCircle size={12} className="text-success" />}
+              {statuses[v] === "submitted" && <CheckCircle size={12} className={activeVisit === v ? "text-green-300" : "text-success"} />}
+              {statuses[v] === "pending"   && <Clock size={12} className={activeVisit === v ? "text-amber-300" : "text-amber-500"} />}
             </button>
           ))}
         </div>
@@ -338,62 +391,144 @@ function VisitAssessmentPanel({ placementId, supervisorId, studentName, onClose 
             <div className="flex justify-center py-16">
               <Loader2 className="animate-spin text-brand-500" size={28} />
             </div>
-          ) : isDone ? (
-            <div className="flex flex-col items-center py-10 gap-4 text-center">
-              <div className="w-14 h-14 bg-brand-100 rounded-full flex items-center justify-center">
-                <CheckCircle size={28} className="text-success" />
-              </div>
-              <div>
-                <p className="font-black text-brand-900 text-lg">Assessment Submitted</p>
-                <p className="text-sm text-gray-400 mt-1">
-                  Visit {activeVisit} assessment has been recorded.
-                </p>
-              </div>
-            </div>
           ) : (
             <>
-              {/* Visit date */}
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">
-                  Visit Date
-                </label>
-                <input
-                  type="date"
-                  value={form.visit_date}
-                  onChange={(e) =>
-                    setForms((f) => ({ ...f, [activeVisit]: { ...f[activeVisit], visit_date: e.target.value } }))
-                  }
-                  className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm
-                    text-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-500/30"
-                />
-              </div>
+              {/* ── PHASE 1: Schedule ── */}
+              <div className={`rounded-2xl border-2 p-5 space-y-4 transition-all
+                ${isScheduled ? "border-brand-100 bg-brand-100/30" : "border-dashed border-gray-200"}`}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-black text-brand-900 uppercase tracking-widest">
+                      Step 1 — Schedule Visit
+                    </p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      Student will be notified by email with the visit date
+                    </p>
+                  </div>
+                  {isScheduled && (
+                    <span className="flex items-center gap-1.5 text-[10px] font-black text-brand-600
+                      bg-brand-100 px-2.5 py-1 rounded-full uppercase tracking-wider">
+                      <CheckCircle size={10} /> Scheduled
+                    </span>
+                  )}
+                </div>
 
-              {/* Score criteria */}
-              <div className="space-y-5">
-                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                  Score each criterion out of 10
-                </p>
-                {CRITERIA.map(({ key, label }) => (
-                  <ScoreInput
-                    key={key}
-                    label={label}
-                    value={form[key]}
-                    onChange={setScore(key)}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">
+                    Visit Date {minDate && `(${minDate} – ${maxDate})`}
+                  </label>
+                  <input
+                    type="date"
+                    value={schedDate[activeVisit]}
+                    min={minDate || today}
+                    max={maxDate}
+                    onChange={(e) => setSchedDate((d) => ({ ...d, [activeVisit]: e.target.value }))}
+                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm
+                      text-brand-900 focus:outline-none focus:ring-2 focus:ring-brand-500/30"
                   />
-                ))}
+                </div>
+
+                {isScheduled && schedDate[activeVisit] && (
+                  <div className="flex items-center gap-2 p-3 bg-brand-100 rounded-xl">
+                    <Calendar size={14} className="text-brand-600 shrink-0" />
+                    <p className="text-xs font-bold text-brand-800">
+                      {fmtDate(schedDate[activeVisit])}
+                    </p>
+                  </div>
+                )}
+
+                <Textarea
+                  label="Notes for student (optional)"
+                  placeholder="e.g. Please have your logbook ready. We'll meet at the reception."
+                  value={schedNotes[activeVisit]}
+                  onChange={(e) => setSchedNotes((n) => ({ ...n, [activeVisit]: e.target.value }))}
+                  rows={2}
+                  maxLength={400}
+                />
+
+                <Button
+                  size="sm"
+                  variant={isScheduled ? "secondary" : "primary"}
+                  loading={saving && !isAssessed}
+                  onClick={handleScheduleClick}
+                >
+                  <Calendar size={13} />
+                  {isScheduled ? "Update Schedule & Notify" : "Schedule Visit & Notify Student"}
+                </Button>
               </div>
 
-              <Textarea
-                label="Comments"
-                placeholder="Observations from the visit — what did you notice about the student's progress?"
-                value={form.comments}
-                onChange={(e) =>
-                  setForms((f) => ({ ...f, [activeVisit]: { ...f[activeVisit], comments: e.target.value } }))
-                }
-                rows={4}
-                maxLength={800}
-                showCount
-              />
+              {/* ── PHASE 2: Assessment scores (only after scheduling AND visit date passed) ── */}
+              <div className={`rounded-2xl border-2 p-5 space-y-5 transition-all
+                ${!isScheduled ? "opacity-40 pointer-events-none border-dashed border-gray-200"
+                : !visitPassed ? "opacity-50 pointer-events-none border-dashed border-amber-200 bg-amber-50/20"
+                : isAssessed  ? "border-brand-100 bg-brand-100/10"
+                : "border-amber-100 bg-amber-50/30"}`}>
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-black text-brand-900 uppercase tracking-widest">
+                      Step 2 — Assessment Scores
+                    </p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {!isScheduled
+                        ? "Schedule the visit first"
+                        : !visitPassed
+                        ? `Unlocks on visit day — ${fmtDate(schedDate[activeVisit])}`
+                        : "Fill in after the visit has taken place"
+                      }
+                    </p>
+                  </div>
+                  {isAssessed && (
+                    <span className="flex items-center gap-1.5 text-[10px] font-black text-success
+                      bg-green-100 px-2.5 py-1 rounded-full uppercase tracking-wider">
+                      <CheckCircle size={10} /> Assessed
+                    </span>
+                  )}
+                  {isScheduled && !isAssessed && visitPassed && (
+                    <span className="flex items-center gap-1.5 text-[10px] font-black text-amber-600
+                      bg-amber-100 px-2.5 py-1 rounded-full uppercase tracking-wider">
+                      <Clock size={10} /> Awaiting Scores
+                    </span>
+                  )}
+                  {isScheduled && !visitPassed && (
+                    <span className="flex items-center gap-1.5 text-[10px] font-black text-amber-600
+                      bg-amber-100 px-2.5 py-1 rounded-full uppercase tracking-wider">
+                      <Clock size={10} /> Visit Upcoming
+                    </span>
+                  )}
+                </div>
+
+                <div className="space-y-5">
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                    Score each criterion out of 10
+                  </p>
+                  {CRITERIA.map(({ key, label }) => (
+                    <ScoreInput key={key} label={label} value={form[key]} onChange={setScore(key)} />
+                  ))}
+                </div>
+
+                <Textarea
+                  label="Assessment Comments"
+                  placeholder="Observations from the visit — student progress, professionalism, any concerns…"
+                  value={form.comments}
+                  onChange={(e) =>
+                    setForms((f) => ({ ...f, [activeVisit]: { ...f[activeVisit], comments: e.target.value } }))
+                  }
+                  rows={3}
+                  maxLength={800}
+                  showCount
+                />
+
+                <Button
+                  size="sm"
+                  variant="primary"
+                  loading={saving && isScheduled}
+                  onClick={handleSubmitScores}
+                >
+                  <Send size={13} />
+                  {isAssessed ? "Update Assessment" : "Submit Assessment"}
+                </Button>
+              </div>
 
               {error && (
                 <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-100 rounded-xl">
@@ -405,19 +540,27 @@ function VisitAssessmentPanel({ placementId, supervisorId, studentName, onClose 
           )}
         </div>
 
-        {!isDone && !loading && (
-          <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 rounded-b-3xl flex justify-end gap-3">
-            <Button variant="ghost" onClick={onClose}>Cancel</Button>
-            <Button variant="primary" loading={saving} onClick={handleSubmit}>
-              <Send size={14} /> Submit Visit {activeVisit}
-            </Button>
-          </div>
-        )}
+        <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 rounded-b-3xl flex justify-end">
+          <Button variant="ghost" onClick={onClose}>Close</Button>
+        </div>
       </div>
+
+      <ConfirmModal
+        isOpen={confirmOpen}
+        onClose={() => setConfirmOpen(false)}
+        onConfirm={handleSchedule}
+        title={statuses[activeVisit] ? "Reschedule Visit?" : `Schedule Visit ${activeVisit}?`}
+        message={
+          statuses[activeVisit]
+            ? `The student will receive a new email notification with the updated visit date: ${fmtDate(schedDate[activeVisit])}.`
+            : `An email will be sent to ${studentName} notifying them of Visit ${activeVisit} on ${fmtDate(schedDate[activeVisit])}.${schedNotes[activeVisit] ? ` Notes: "${schedNotes[activeVisit]}"` : ""}`
+        }
+        confirmText={statuses[activeVisit] ? "Reschedule & Notify" : "Confirm & Notify Student"}
+        type="warning"
+      />
     </div>
   );
 }
-
 // -- Main portal ---------------------------------------------------------------
 export default function UniversitySupervisorPortal() {
   const { user } = UserAuth();
@@ -785,6 +928,7 @@ export default function UniversitySupervisorPortal() {
           placementId={selectedStudent.placementId}
           supervisorId={data.supervisor?.id}
           studentName={selectedStudent.student?.full_name || "Student"}
+          placement={{ start_date: selectedStudent.startDate, end_date: selectedStudent.endDate }}
           onClose={() => { setShowAssessment(false); setSelectedStudent(null); }}
         />
       )}
