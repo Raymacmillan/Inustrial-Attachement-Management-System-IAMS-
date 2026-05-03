@@ -216,7 +216,7 @@ export default function LandingPage() {
               Sign In
             </button>
             <button
-              onClick={() => nav("/register/student")}
+              onClick={() => nav("/register")}
               className="text-sm font-black bg-brand-600 hover:bg-brand-500 text-white
                 px-5 py-2.5 rounded-xl transition-all shadow-lg shadow-brand-600/25
                 hover:shadow-brand-500/35 hover:-translate-y-px"
