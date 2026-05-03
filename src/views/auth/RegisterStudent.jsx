@@ -211,6 +211,15 @@ export default function RegisterStudent() {
                 Already registered?{" "}
                 <Link to="/login" className="text-brand-600 font-bold hover:underline">Sign In</Link>
               </p>
+
+              <div className="pt-2 border-t border-gray-100">
+                <p className="text-center text-xs text-gray-400 font-medium">
+                  Registering as an employer instead?{" "}
+                  <Link to="/register/org" className="text-brand-600 font-bold hover:underline">
+                    Employer signup →
+                  </Link>
+                </p>
+              </div>
             </form>
           </div>
         </div>

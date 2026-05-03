@@ -187,11 +187,20 @@ export default function RegisterOrg() {
               </div>
 
               <p className="text-center text-sm text-gray-500 font-medium">
-                Are you a student?{" "}
-                <Link to="/register/student" className="text-brand-600 font-bold hover:underline">
-                  Register here
+                Already registered?{" "}
+                <Link to="/login" className="text-brand-600 font-bold hover:underline">
+                  Sign in
                 </Link>
               </p>
+
+              <div className="border-t border-gray-100 pt-2">
+                <p className="text-center text-xs text-gray-400 font-medium">
+                  Registering as a student instead?{" "}
+                  <Link to="/register/student" className="text-brand-600 font-bold hover:underline">
+                    Student signup →
+                  </Link>
+                </p>
+              </div>
             </form>
           </div>
         </div>
