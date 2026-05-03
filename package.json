@@ -11,6 +11,7 @@
     "test": "vitest"
   },
   "dependencies": {
+    "@react-pdf/renderer": "^4.5.1",
     "@supabase/supabase-js": "^2.99.2",
     "@tailwindcss/vite": "^4.2.1",
     "cookie": "^1.1.1",
@@ -38,4 +39,3 @@
     "vitest": "^4.1.0"
   }
 }
-

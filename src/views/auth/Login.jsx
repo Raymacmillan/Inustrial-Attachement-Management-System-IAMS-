@@ -1,63 +1,86 @@
 import { useState } from "react";
 import { UserAuth } from "../../context/AuthContext";
 import { useNavigate, Link, useLocation } from "react-router-dom";
+import { supabase } from "../../lib/supabaseClient";
 import Input from "../../components/ui/Input";
 import Button from "../../components/ui/Button";
 import {
-  Mail,
-  Lock,
-  AlertCircle,
-  CheckCircle2,
-  ArrowRight,
+  Mail, Lock, AlertCircle, CheckCircle2, ArrowRight,
 } from "lucide-react";
 
+const ROLE_HOME = {
+  student:               "/student/dashboard",
+  org:                   "/org/portal",
+  coordinator:           "/coordinator/dashboard",
+  industrial_supervisor: "/supervisor/industrial/dashboard",
+  university_supervisor: "/supervisor/university/dashboard",
+};
+
 export default function Login() {
-  const location = useLocation();
-  const navigate = useNavigate();
+  const location  = useNavigate();
+  const navigate  = useNavigate();
   const { signInUser } = UserAuth();
 
-  const successMsg = location.state?.message;
+  const successMsg = useLocation().state?.message;
 
-  const [email, setEmail] = useState(
-    localStorage.getItem("rememberedEmail") || "",
-  );
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [rememberMe, setRememberMe] = useState(
-    !!localStorage.getItem("rememberedEmail"),
-  );
+  const [email,      setEmail]      = useState(localStorage.getItem("rememberedEmail") || "");
+  const [password,   setPassword]   = useState("");
+  const [error,      setError]      = useState("");
+  const [loading,    setLoading]    = useState(false);
+  const [rememberMe, setRememberMe] = useState(!!localStorage.getItem("rememberedEmail"));
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setError("");
     setLoading(true);
 
-    if (rememberMe) {
-      localStorage.setItem("rememberedEmail", email);
-    } else {
-      localStorage.removeItem("rememberedEmail");
-    }
+    if (rememberMe) localStorage.setItem("rememberedEmail", email);
+    else            localStorage.removeItem("rememberedEmail");
 
-    const { success, error: authError, data } = await signInUser(email, password);
-
-    if (success && data?.user) {
-      const role = data.user.user_metadata?.role;
-      if (role === "coordinator") navigate("/coordinator/dashboard");
-      else if (role === "org") navigate("/org/portal");
-      else if (role === "student") navigate("/student/dashboard");
-      else navigate("/unauthorized");
-    } else {
+    let result;
+    try {
+      result = await signInUser(email, password);
+    } catch (err) {
+      setError("An unexpected error occurred. Please try again.");
       setLoading(false);
-      setError(authError || "Invalid email or password. Please try again.");
+      return;
     }
+
+    if (!result?.success) {
+      setError(result?.error || "Invalid email or password. Please try again.");
+      setLoading(false);
+      return;
+    }
+
+    const userId = result.data?.user?.id;
+    if (!userId) {
+      setError("Login succeeded but user data is missing. Please try again.");
+      setLoading(false);
+      return;
+    }
+
+    // Read role from user_roles table — not user_metadata.
+    // Coordinator and supervisor accounts don't have user_metadata.role set.
+    const { data: roleRow } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", userId)
+      .single();
+
+    const role = roleRow?.role ?? result.data.user.user_metadata?.role;
+
+    if (!role) {
+      setError("Your account has no assigned role. Please contact the coordinator.");
+      setLoading(false);
+      return;
+    }
+
+    const destination = ROLE_HOME[role] ?? "/unauthorized";
+    navigate(destination, { replace: true });
   };
 
   return (
-    // ── Outer shell: full screen, dark bg, centers the card ──
     <div className="min-h-screen w-full bg-brand-950 flex items-center justify-center p-4 font-body">
-
-      {/* ── The card: two panels side by side, max width contained ── */}
       <div className="w-full max-w-5xl flex rounded-lg overflow-hidden shadow-2xl">
 
         {/* ── LEFT PANEL ── */}

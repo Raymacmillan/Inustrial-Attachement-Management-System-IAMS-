@@ -6,6 +6,7 @@ import {
   Mail, UserCheck, ShieldAlert, ChevronRight,
 } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient";
+import { coordinatorService } from "../../services/coordinatorService";
 import Button from "../../components/ui/Button";
 import ConfirmModal from "../../components/ui/ConfirmModal";
 import Badge from "../../components/ui/Badge";
@@ -262,7 +263,7 @@ function BatchPanel({ selectedMatches, onClose, onAllocate, isRunning }) {
 }
 
 // ── Inline vacancy selector for manual allocation ─────────────────────
-function ManualAllocateRow({ student, vacancies, onAllocate, processing }) {
+function ManualAllocateRow({ student, vacancies, onAllocate, onReject, processing, rejecting }) {
   const [selectedVacancy, setSelectedVacancy] = useState("");
   const vacancy = vacancies.find(v => v.id === selectedVacancy);
   const isDocBlocked = Boolean(student.doc_warning);
@@ -326,7 +327,15 @@ function ManualAllocateRow({ student, vacancies, onAllocate, processing }) {
       {isDocBlocked && (
         <div className="mt-3 flex items-start gap-2 p-3 bg-red-50 border border-red-100 rounded-xl">
           <ShieldAlert size={13} className="text-red-500 shrink-0 mt-0.5" />
-          <p className="text-xs font-bold text-red-600">{student.doc_warning}</p>
+          <p className="text-xs font-bold text-red-600 flex-1">{student.doc_warning}</p>
+          <button
+            onClick={() => onReject(student)}
+            disabled={rejecting}
+            className="shrink-0 text-[10px] font-black text-white bg-red-500 hover:bg-red-600
+              px-3 py-1.5 rounded-lg transition-colors cursor-pointer disabled:opacity-50 whitespace-nowrap"
+          >
+            {rejecting ? "Rejecting…" : "Reject Student"}
+          </button>
         </div>
       )}
     </div>
@@ -359,7 +368,22 @@ export default function MatchingEngine() {
   const [batchLog, setBatchLog]                     = useState([]);
   const [batchDone, setBatchDone]                   = useState(false);
   const [processingId, setProcessingId]             = useState(null);
+  const [rejectingId,  setRejectingId]              = useState(null);
   const [resultModal, setResultModal]               = useState({ open: false, success: true, message: "" });
+
+  // ── Reject from engine ──
+  const handleEngineReject = async (student) => {
+    setRejectingId(student.student_id);
+    try {
+      await coordinatorService.rejectStudent(student.student_id, student.student_name);
+      setSuggestions(prev => prev.filter(s => s.student_id !== student.student_id));
+      setResultModal({ open: true, success: true, message: `${student.student_name} has been rejected and notified.` });
+    } catch (err) {
+      setResultModal({ open: true, success: false, message: err.message || "Rejection failed." });
+    } finally {
+      setRejectingId(null);
+    }
+  };
 
   // ── Derived state ──
   const placeableMatches    = suggestions.filter(s => !s.is_unplaceable && s.vacancy_id);
@@ -726,10 +750,19 @@ export default function MatchingEngine() {
                     {isDocBlocked && (
                       <div className="flex items-start gap-2 mt-2 p-3 bg-red-50 border border-red-100 rounded-xl">
                         <ShieldAlert size={13} className="text-red-500 shrink-0 mt-0.5" />
-                        <div>
+                        <div className="flex-1">
                           <p className="text-xs font-black text-red-600 uppercase tracking-wide">Allocation Blocked</p>
                           <p className="text-xs font-medium text-red-600 mt-0.5">{match.doc_warning}</p>
                         </div>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleEngineReject(match); }}
+                          disabled={rejectingId === match.student_id}
+                          className="shrink-0 text-[10px] font-black text-white bg-red-500
+                            hover:bg-red-600 px-3 py-1.5 rounded-lg transition-colors cursor-pointer
+                            disabled:opacity-50 whitespace-nowrap"
+                        >
+                          {rejectingId === match.student_id ? "Rejecting…" : "Reject Student"}
+                        </button>
                       </div>
                     )}
                   </div>
@@ -758,7 +791,9 @@ export default function MatchingEngine() {
               student={student}
               vacancies={availableVacancies}
               onAllocate={handleManualAllocate}
+              onReject={handleEngineReject}
               processing={processingId === student.student_id}
+              rejecting={rejectingId === student.student_id}
             />
           ))}
         </div>
@@ -782,7 +817,18 @@ export default function MatchingEngine() {
                   <p className="text-[10px] text-amber-600 font-bold uppercase tracking-wide mt-0.5">{s.doc_warning}</p>
                 )}
               </div>
-              <Badge variant="default">Needs Profile</Badge>
+              <div className="flex items-center gap-2 shrink-0">
+                <Badge variant="default">Needs Profile</Badge>
+                <button
+                  onClick={() => handleEngineReject(s)}
+                  disabled={rejectingId === s.student_id}
+                  className="text-[10px] font-black text-white bg-red-500 hover:bg-red-600
+                    px-3 py-1.5 rounded-lg transition-colors cursor-pointer
+                    disabled:opacity-50 whitespace-nowrap"
+                >
+                  {rejectingId === s.student_id ? "Rejecting…" : "Reject"}
+                </button>
+              </div>
             </div>
           ))}
         </div>

@@ -8,6 +8,7 @@ export default function ConfirmModal({
   title = "Are you sure?", 
   message = "This action cannot be undone.",
   confirmText = "Delete",
+  cancelText  = "Cancel",
   type = "danger" // 'danger' or 'warning'
 }) {
   if (!isOpen) return null;
@@ -45,7 +46,7 @@ export default function ConfirmModal({
               onClick={onClose}
               className="order-2 sm:order-1"
             >
-              Cancel
+              {cancelText}
             </Button>
             <Button 
               variant={type === 'danger' ? 'primary' : 'secondary'} 
