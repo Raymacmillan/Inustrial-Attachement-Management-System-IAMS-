@@ -140,18 +140,30 @@ export const coordinatorService = {
 
   /**
    * Assign a university supervisor by name + email.
-   * Free text since university supervisors don't have a pre-existing roster.
+   * Also looks up university_supervisors.id by email and sets the UUID FK —
+   * this is what getUniversitySupervisorDashboard queries by so the portal
+   * can retrieve assigned students. Without the UUID the portal returns empty.
    */
   assignUniversitySupervisor: async (placementId, name, email) => {
     if (!name?.trim() || !email?.trim()) {
       throw new Error("Both name and email are required for university supervisor.");
     }
 
+    // Look up the university_supervisors row by email to get the UUID
+    const { data: uniSup } = await supabase
+      .from("university_supervisors")
+      .select("id")
+      .eq("email", email.trim())
+      .maybeSingle();
+
     const { error } = await supabase
       .from("placements")
       .update({
         university_supervisor_name:  name.trim(),
         university_supervisor_email: email.trim(),
+        // Critical — this UUID is what the university supervisor portal
+        // queries by. If null the supervisor sees no students.
+        ...(uniSup?.id ? { university_supervisor_id: uniSup.id } : {}),
       })
       .eq("id", placementId);
 
@@ -162,6 +174,7 @@ export const coordinatorService = {
   /**
    * Update both supervisor fields at once (free-text fallback,
    * used when coordinator overrides the dropdown selection).
+   * Also resolves university_supervisor_id by email so the portal stays linked.
    */
   updatePlacementSupervisors: async (placementId, supervisorData) => {
     const {
@@ -171,6 +184,17 @@ export const coordinatorService = {
       university_supervisor_email,
     } = supervisorData;
 
+    // Resolve university supervisor UUID if email is provided
+    let uniSupId = undefined;
+    if (university_supervisor_email?.trim()) {
+      const { data: uniSup } = await supabase
+        .from("university_supervisors")
+        .select("id")
+        .eq("email", university_supervisor_email.trim())
+        .maybeSingle();
+      if (uniSup?.id) uniSupId = uniSup.id;
+    }
+
     const { error } = await supabase
       .from("placements")
       .update({
@@ -178,6 +202,7 @@ export const coordinatorService = {
         industrial_supervisor_email,
         university_supervisor_name,
         university_supervisor_email,
+        ...(uniSupId ? { university_supervisor_id: uniSupId } : {}),
       })
       .eq("id", placementId);
 
