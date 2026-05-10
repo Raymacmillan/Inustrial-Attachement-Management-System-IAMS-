@@ -46,7 +46,7 @@ The Department of Computer Science at the University of Botswana manages hundred
 
 | Traditional System | IAMS |
 |---|---|
-| Paper logbooks, prone to loss | Digital weekly logbook with auto-save |
+| Paper logbooks, prone to loss | Digital weekly logbook with auto-save and three structured templates |
 | Manual matching by coordinator | Heuristic scoring engine with slot-aware deduplication |
 | No document enforcement | Allocation blocked if required documents are missing |
 | Supervisor visits uncoordinated | Two-phase visit scheduling with student email notification |
@@ -54,8 +54,6 @@ The Department of Computer Science at the University of Botswana manages hundred
 | Physical PDF reports | Legally-formatted document with UB letterhead and signature blocks |
 
 ---
-
-## Screenshots
 
 ## Screenshots
 
@@ -85,11 +83,12 @@ The Department of Computer Science at the University of Botswana manages hundred
 
 | Technology | Version | Purpose |
 |---|---|---|
-| [React](https://react.dev) | 19.x | UI component framework |
-| [Vite](https://vitejs.dev) | 7.x | Build tool and dev server |
-| [React Router](https://reactrouter.com) | 7.x | Client-side routing with nested layouts |
-| [Tailwind CSS](https://tailwindcss.com) | 4.x | Utility-first styling with custom design tokens |
-| [@react-pdf/renderer](https://react-pdf.org) | latest | Legal-grade PDF generation in the browser |
+| [React](https://react.dev) | 19.1.x | UI component framework with concurrent features |
+| [Vite](https://vitejs.dev) | 7.1.x | Build tool and HMR dev server (SWC plugin) |
+| [React Router](https://reactrouter.com) | 7.13.x | Client-side routing with nested layouts and `Outlet` |
+| [Tailwind CSS](https://tailwindcss.com) | 4.2.x | Utility-first styling with custom design tokens |
+| [@react-pdf/renderer](https://react-pdf.org) | 4.5.x | Legal-grade PDF generation entirely in the browser |
+| [Lucide React](https://lucide.dev) | 0.577.x | Open-source SVG icon library |
 
 ### Backend
 
@@ -97,150 +96,169 @@ The Department of Computer Science at the University of Botswana manages hundred
 |---|---|
 | [Supabase](https://supabase.com) (PostgreSQL) | Primary database with Row Level Security |
 | [Supabase Auth](https://supabase.com/auth) | JWT-based authentication and session management |
-| [Supabase Edge Functions](https://supabase.com/edge-functions) | Deno serverless functions for email and scoring |
+| [Supabase Edge Functions](https://supabase.com/edge-functions) | Deno serverless functions for email delivery and scoring |
 | [Supabase Storage](https://supabase.com/storage) | CV, transcript, and avatar file storage |
 | [Resend](https://resend.com) | Transactional email delivery |
 
 ### Testing & Tooling
 
-| Tool | Purpose |
-|---|---|
-| [Vitest](https://vitest.dev) | Unit and integration test runner |
-| [React Testing Library](https://testing-library.com/react) | Component rendering and DOM assertions |
-| [@testing-library/user-event](https://testing-library.com) | Realistic user interaction simulation |
-| [ESLint](https://eslint.org) | Static code analysis |
-| [Lucide React](https://lucide.dev) | Open-source SVG icon library |
+| Tool | Version | Purpose |
+|---|---|---|
+| [Vitest](https://vitest.dev) | 4.1.x | Test runner compatible with Vite's plugin system |
+| [React Testing Library](https://testing-library.com/react) | 16.3.x | Component rendering and accessible DOM assertions |
+| [@testing-library/user-event](https://testing-library.com) | 14.6.x | Realistic user interaction simulation |
+| [jsdom](https://github.com/jsdom/jsdom) | 29.x | Browser environment simulation for Vitest |
+| [ESLint](https://eslint.org) | 9.36.x | Static code analysis with React hooks and refresh plugins |
 
 ---
 
 ## Architecture
 
 ```
-┌────────────────────────────────────────────────────────────────┐
-│                        Browser (React 19)                       │
-│  ┌──────────┐  ┌──────────┐  ┌─────────────┐  ┌───────────┐ │
-│  │ Student  │  │   Org    │  │ Coordinator │  │Supervisors│ │
-│  │  Portal  │  │  Portal  │  │  Dashboard  │  │(Ind.+Uni.)│ │
-│  └────┬─────┘  └────┬─────┘  └──────┬──────┘  └─────┬─────┘ │
-│       └─────────────┴────────────────┴────────────────┘        │
-│                  React Router 7 + AuthContext                   │
-└──────────────────────────┬─────────────────────────────────────┘
-                            │  supabase-js SDK
-┌──────────────────────────▼─────────────────────────────────────┐
-│                       Supabase Platform                         │
-│  ┌─────────────┐  ┌──────────┐  ┌──────────────────────────┐ │
-│  │ PostgreSQL  │  │ Supabase │  │     Edge Functions        │ │
-│  │ + RLS       │  │   Auth   │  │   (Deno Runtime)          │ │
-│  └──────┬──────┘  └──────────┘  │                           │ │
-│         │                       │  match-engine              │ │
-│  ┌──────▼──────┐  ┌──────────┐  │  send-supervisor-invite   │ │
-│  │  Supabase   │  │ pg_cron  │  │  complete-sup-reg         │ │
-│  │  Storage    │  │ (Monday  │  │  weekly-logbook-reminder  │ │
-│  │ (CVs, Docs) │  │ 05:00UTC)│  │  send-visit-notification  │ │
-│  └─────────────┘  └──────────┘  │  send-status-notif.       │ │
-│                                  └──────────────────────────┘ │
-└────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────┐
+│                          Browser (React 19)                         │
+│  ┌──────────┐  ┌──────────┐  ┌─────────────┐  ┌───────────────┐  │
+│  │ Student  │  │   Org    │  │ Coordinator │  │  Supervisors  │  │
+│  │  Portal  │  │  Portal  │  │  Dashboard  │  │ (Ind. + Uni.) │  │
+│  └────┬─────┘  └────┬─────┘  └──────┬──────┘  └───────┬───────┘  │
+│       └─────────────┴────────────────┴──────────────────┘          │
+│                    React Router 7 + AuthContext                     │
+│              Navbar · Sidebar · ProtectedRoute guard                │
+└────────────────────────────┬───────────────────────────────────────┘
+                              │  @supabase/supabase-js SDK
+┌────────────────────────────▼───────────────────────────────────────┐
+│                         Supabase Platform                           │
+│  ┌─────────────────┐  ┌────────────┐  ┌─────────────────────────┐ │
+│  │   PostgreSQL     │  │  Supabase  │  │     Edge Functions       │ │
+│  │   + RLS Policies │  │    Auth    │  │    (Deno Runtime)        │ │
+│  └────────┬─────────┘  └────────────┘  │                         │ │
+│           │                            │  match-engine (v8)       │ │
+│  ┌────────▼─────────┐  ┌────────────┐  │  send-supervisor-invite  │ │
+│  │   Supabase       │  │  pg_cron   │  │  complete-sup-reg        │ │
+│  │   Storage        │  │ (Mon 05:00 │  │  weekly-logbook-reminder │ │
+│  │  CVs / Transcripts│  │   UTC)     │  │  send-visit-notification │ │
+│  │  Avatars         │  └────────────┘  │  send-status-notif.      │ │
+│  └──────────────────┘                  └─────────────────────────┘ │
+└────────────────────────────────────────────────────────────────────┘
 ```
 
-**Key design decisions:**
+### Key Design Decisions
 
-- **Row Level Security everywhere** — no admin access from the frontend. Every query is scoped to the authenticated user's role via RLS policies and a `SECURITY DEFINER` function to bypass JWT caching.
-- **Five distinct user roles** — `student`, `org`, `coordinator`, `industrial_supervisor`, `university_supervisor` — each with a dedicated portal and RLS-enforced data scope.
-- **Edge functions for side effects** — email delivery, match scoring, and cron reminders all run in Deno at the edge, keeping the React client thin.
-- **Invitation-based supervisor registration** — supervisors cannot self-register. A coordinator issues a tokenised email invitation which auto-links the account to the correct organisation on registration.
+- **Row Level Security everywhere** — no admin access from the frontend. Every query is scoped to the authenticated user's role via RLS policies and a `SECURITY DEFINER` helper function to avoid JWT caching issues on coordinator checks.
+- **Five distinct user roles** — `student`, `org`, `coordinator`, `industrial_supervisor`, `university_supervisor` — each with a dedicated portal, nested route tree, and RLS-enforced data scope.
+- **Service layer pattern** — all database access is isolated to `src/services/`. Components never call `supabase` directly; they call service methods that throw on failure, and components catch and display errors.
+- **Edge functions for side effects** — email delivery, match scoring, and cron reminders all run in Deno at the edge, keeping the React client thin and avoiding API key exposure.
+- **Invitation-based supervisor registration** — supervisors cannot self-register. A coordinator issues a tokenised email invitation which auto-links the new account to the correct organisation on first login.
 
 ---
 
 ## Features
 
 ### Landing Page
-- Animated scroll reveal sections with `IntersectionObserver`
-- Problem statement, four-step flow, all five role breakdowns, feature grid
+- Animated scroll-reveal sections using `IntersectionObserver`
+- Problem statement, four-step attachment flow, all five role breakdowns, feature grid
 - Direct CTAs to student and organisation registration
 
 ### Student Portal
 
 | Feature | Details |
 |---|---|
-| Registration | UB email (`@ub.ac.bw`) required, 9-digit student ID validated, full name (two words minimum) enforced |
-| Document upload | CV and transcript to Supabase Storage — both required for matching eligibility |
-| Career preferences | Technical skills, preferred locations, preferred roles, minimum stipend |
+| Registration | UB email (`@ub.ac.bw`) required, 9-digit student ID validated, full name (two words minimum) enforced; real-time `PasswordStrengthMeter` feedback |
+| Document upload | CV and transcript uploaded to Supabase Storage — both are required for matching eligibility |
+| Career preferences | Technical skills, preferred locations, preferred roles, minimum stipend — multi-select with `SearchableSelect` |
 | Dashboard | Live placement card with org, position, dates, days remaining, both supervisors with contact links |
-| Rejection flow | Red banner with coordinator email link and preferences CTA |
+| Rejection flow | Red banner with coordinator email link and Update Preferences CTA |
 | Visit notifications | Scheduled supervisor visits with date-aware status (upcoming / today / passed / assessed) |
-| Weekly Logbook | Mon–Fri tabbed daily entries, auto-save, progress bar, week grid |
-| Supervisor feedback | Colour-coded comments — green on approval, red on flag |
+| Weekly logbook | Mon–Fri tabbed daily entries with three entry templates (Standard, Technical, Soft Skills), auto-save with `SaveIndicator`, progress bar, week grid |
+| Logbook templates | **Standard** — general daily activities; **Technical** — tools, technologies, and problem-solving focus; **Soft Skills** — communication, teamwork, and professional growth focus |
+| Supervisor feedback | Colour-coded comments — green approval, red action-needed flag visible on resubmission |
 | PDF export | Full legal document with UB letterhead, tables, digital stamp, certification page |
+| Assessment reports | View industrial supervisor performance scores and university supervisor visit assessment scores with colour-coded `ScoreBar` visualisations |
 
 ### Organisation Portal
 
 | Feature | Details |
 |---|---|
-| Registration | Full org profile — industry, location, contact |
-| Verification | Auto-verified when all required fields complete |
-| Vacancies | Required skills, GPA minimum, available slots |
-| Doc requirements | Toggle CV/transcript requirement per org — enforced at allocation |
-| Supervisor roster | Multiple supervisors with role titles, invitation-based registration |
+| Registration | Full org profile — industry, location, website, contact |
+| Verification | Auto-verified when all required profile fields are complete |
+| Vacancies | Required skills, GPA minimum, available slots per vacancy |
+| Document requirements | Toggle CV/transcript requirement per organisation — enforced at allocation |
+| Supervisor roster | Multiple supervisors per org with role titles; invitation-based account registration |
+| Applications | View student applications and placement status per vacancy |
 
 ### Coordinator Dashboard
 
 | Feature | Details |
 |---|---|
-| Student Registry | Full list with status filter, audit modal per student |
-| Student Audit Modal | View docs, assign supervisors, set dates, update status, reject with two-step confirm |
-| Rejection flow | Sets status, fires email notification, student sees banner immediately |
+| Overview stats | Summary `StatCard` widgets for students, placements, and organisations |
+| Student registry | Full list with status filter, search, and audit modal per student |
+| Student audit modal | View docs, assign supervisors, set placement dates, update status, reject with two-step confirm |
+| Rejection flow | Sets `status = rejected`, fires email notification, student sees rejection banner immediately |
 | Reinstatement | Return a rejected student to pending in one click |
-| Supervisor Management | Invite supervisors by email with tokenised registration link |
-| Matching Engine | Scored suggestions, slot-aware, doc-enforced, reject from engine |
+| Partner registry | Browse all registered organisations with `PartnerDetailPanel` slide-out |
+| Supervisor management | Invite supervisors by email via `InviteSupervisorModal` — generates tokenised registration link |
+| Matching engine | Scored suggestions per student, slot-aware, document-enforced, reject directly from engine |
 
 ### Matching Engine (Edge Function v8)
 
 ```
-Total Score (max 100) = Skills + GPA + Location
+Total Score (max 100 pts) = Skills + GPA + Location
 ```
 
 | Criterion | Max | Formula |
 |---|---|---|
-| Skills match | 50 pts | `matched / required × 50` |
-| GPA | 30 pts | `gpa / 5.0 × 30` — only if ≥ minimum |
-| Location | 20 pts | Flat 20pts if location matches |
+| Skills match | 50 pts | `matched_skills / required_skills × 50` |
+| GPA | 30 pts | `student_gpa / 5.0 × 30` — only applied if student GPA ≥ org minimum |
+| Location | 20 pts | Flat 20 pts if student preferred location matches org location |
 
-Slot-aware deduplication: each vacancy is offered to at most `available_slots` students. Highest scorers claim slots first. Displaced students redirect to next-best match.
+Slot-aware deduplication: each vacancy is offered to at most `available_slots` students. Highest scorers claim slots first; displaced students are redirected to the next-best match automatically.
+
+**Allocation guard:** if the organisation requires a CV or transcript and the student has not uploaded it, the match engine returns a `missing_docs` warning and the coordinator cannot allocate that student until the documents are present.
 
 ### Industrial Supervisor Portal
 
 | Feature | Details |
 |---|---|
-| Week review | Full daily log display, student reflection, previous comments visible |
-| Approve | Digital stamp to `logbook_signatures` + `logbook_weeks` + optional comments |
-| Flag | `status: action_needed` with feedback — student sees red banner, can resubmit |
-| Performance report | End-of-attachment scoring — technical, initiative, teamwork, reliability, overall |
+| Student list | All placed students linked to this supervisor's organisation |
+| Week review | Full daily log display per student, student reflection, previous comments |
+| Approve | Digital stamp written to `logbook_signatures` + `logbook_weeks` with optional comments |
+| Flag | Sets `status: action_needed` with written feedback — student sees red banner and may resubmit |
+| Performance report | End-of-attachment scoring — technical ability, initiative, teamwork, reliability, overall rating, strengths and areas for improvement, employment recommendation |
 
 ### University Supervisor Portal
 
 | Feature | Details |
 |---|---|
-| Logbook monitoring | Read-only logbook view across all students |
-| Visit scheduling | Step 1: schedule with date + notes → student email sent; Step 2: fill scores after visit |
-| Date enforcement | Dates constrained to placement period, cannot be past |
-| Confirm modal | Explicit confirmation before scheduling — email preview shown |
-| Assessment lock | Score form disabled until visit date arrives |
+| Logbook monitoring | Read-only logbook view across all assigned students |
+| Visit scheduling | Step 1: schedule with date + notes → student email sent; Step 2: fill scores only after visit date arrives |
+| Date enforcement | Visit dates must fall within the student's placement period and cannot be in the past |
+| Confirm modal | Explicit `ConfirmModal` before scheduling — prevents accidental email sends |
+| Assessment lock | Score form is disabled until the visit date arrives; `SegmentedControl` for visit number selection |
+| Score inputs | Five-criterion `ScoreInput` components per visit (preparation, engagement, progress, professionalism, overall) |
+
+### Assessment Reports (Student View)
+
+Students can view a dedicated **Assessment Reports** page (`/student/assessments`) which consolidates:
+- Industrial supervisor performance report with five scored dimensions displayed as colour-coded `ScoreBar` visualisations (green ≥ 8, amber ≥ 5, red < 5)
+- University supervisor visit assessments per visit with individual dimension breakdowns
+- Employment recommendation flag from the industrial supervisor
+- Strengths and areas-for-improvement narrative blocks
 
 ### Automated Emails
 
-| Trigger | Function | Recipient |
+| Trigger | Edge Function | Recipient |
 |---|---|---|
 | Supervisor invited | `send-supervisor-invite` | Supervisor |
 | Visit scheduled | `send-visit-notification` | Student |
 | Student rejected | `send-student-status-notification` | Student |
-| Monday morning | `weekly-logbook-reminder` | Students with unsubmitted logbook |
+| Monday 05:00 UTC | `weekly-logbook-reminder` | Students with unsubmitted logbook weeks |
 
-### Logbook PDF
+### Logbook PDF Export
 
-Three-section legal document generated client-side:
+Three-section legal document generated client-side via `@react-pdf/renderer`:
 
-1. **Cover** — UB letterhead, reference `UB/CS/IA/YEAR/STUDENTID`, student particulars, placement details, weekly summary table
-2. **Week pages** — daily log table (Day / Date / Activities / Hours), reflection, supervisor feedback, digital stamp with seal
+1. **Cover** — UB letterhead, reference number `UB/CS/IA/YEAR/STUDENTID`, student particulars, placement details, weekly summary table
+2. **Week pages** — daily log table (Day / Date / Activities / Hours), student reflection, supervisor feedback, digital stamp with seal (name, title, timestamp)
 3. **Certification** — student declaration, industrial supervisor certification with company stamp box, university supervisor endorsement, formal signature lines
 
 ---
@@ -250,68 +268,161 @@ Three-section legal document generated client-side:
 ```
 IAMS/
 ├── src/
+│   ├── App.jsx                        # Root component — wraps AuthContext + AvatarContext
+│   ├── main.jsx                       # Vite entry point
+│   ├── index.css                      # Global styles and Tailwind design tokens
+│   │
 │   ├── components/
-│   │   ├── layout/          # RootLayout, StudentLayout, DashboardLayout, ProtectedRoute
-│   │   └── ui/              # Button, Input, Badge, StatusBadge, StatCard, TabBar,
-│   │                        # Textarea, ConfirmModal, EmptyState, DigitalStamp
+│   │   ├── layout/
+│   │   │   ├── RootLayout.jsx         # Top-level layout with Navbar
+│   │   │   ├── Navbar.jsx             # Top navigation bar with avatar + notification bell
+│   │   │   ├── Sidebar.jsx            # Role-specific sidebar navigation
+│   │   │   ├── DashboardLayout.jsx    # Two-column dashboard shell (Sidebar + Outlet)
+│   │   │   ├── StudentLayout.jsx      # Student portal shell with tab navigation
+│   │   │   └── ProtectedRoute.jsx     # Role-gated route wrapper (allowedRoles prop)
+│   │   │
+│   │   └── ui/
+│   │       ├── Badge.jsx              # Colour-coded inline label
+│   │       ├── Button.jsx             # Primary / secondary / danger variants
+│   │       ├── ConfirmModal.jsx       # Two-step destructive action confirmation overlay
+│   │       ├── DigitalStamp.jsx       # Circular supervisor approval stamp with seal
+│   │       ├── EmptyState.jsx         # Zero-data placeholder with icon + CTA
+│   │       ├── ErrorBoundary.jsx      # React error boundary for graceful crash handling
+│   │       ├── Input.jsx              # Labelled text input with error state
+│   │       ├── NotificationBell.jsx   # Bell icon with unread count badge
+│   │       ├── PartnerCard.jsx        # Organisation summary card for Partner Registry
+│   │       ├── PasswordStrengthMeter.jsx  # Real-time password strength indicator
+│   │       ├── Pill.jsx               # Removable tag chip for multi-select fields
+│   │       ├── RouteErrorPage.jsx     # React Router error boundary page
+│   │       ├── SaveIndicator.jsx      # Auto-save status indicator (saving / saved / error)
+│   │       ├── ScoreInput.jsx         # 1–10 numeric score slider for assessments
+│   │       ├── SearchableSelect.jsx   # Filterable dropdown with keyboard navigation
+│   │       ├── SegmentedControl.jsx   # Button-group toggle (visit number, filters)
+│   │       ├── StatCard.jsx           # KPI summary card for coordinator overview
+│   │       ├── StatusBadge.jsx        # Placement status badge (pending / matched / …)
+│   │       ├── TabBar.jsx             # Horizontal tab navigation bar
+│   │       └── Textarea.jsx           # Labelled multi-line input with resize control
+│   │
 │   ├── constants/
-│   │   └── matchingOptions.js
+│   │   ├── logbooktemplates.js        # Three structured logbook entry templates
+│   │   │                              #   standard  — general daily activities
+│   │   │                              #   technical — tools, tech, problem-solving
+│   │   │                              #   soft_skills — communication, teamwork
+│   │   ├── matchingOptions.js         # Skill tags, location options, role categories
+│   │   └── navigation.jsx             # Per-role nav link definitions for Sidebar
+│   │
 │   ├── context/
-│   │   ├── AuthContext.jsx
-│   │   └── AvatarContext.jsx
+│   │   ├── AuthContext.jsx            # Resolves JWT → one of 5 roles; exposes user + profile
+│   │   └── AvatarContext.jsx          # Global avatar URL with sign-out isolation
+│   │
 │   ├── features/
 │   │   └── logbook/
-│   │       ├── LogbookManager.jsx
+│   │       ├── LogbookManager.jsx     # Top-level logbook orchestrator (week selection, state)
 │   │       └── components/
-│   │           ├── LogbookModal.jsx
-│   │           ├── LogbookPDF.jsx       # PDF export + preview + useLogbookWeeks hook
-│   │           ├── WeekCard.jsx
-│   │           └── DailyEntryRow.jsx
+│   │           ├── LogbookModal.jsx   # Full-screen week editor modal
+│   │           ├── LogbookPDF.jsx     # PDF layout + useLogbookWeeks hook + download link
+│   │           ├── WeekCard.jsx       # Week summary card (status, dates, progress bar)
+│   │           └── DailyEntryRow.jsx  # Single day row: template picker + text input + hours
+│   │
 │   ├── lib/
-│   │   └── supabaseClient.js
+│   │   └── supabaseClient.js          # Singleton supabase-js client (anon key)
+│   │
 │   ├── routes/
-│   │   ├── routes.jsx
-│   │   ├── routes.test.jsx
-│   │   └── routes.release2.test.jsx
+│   │   ├── routes.jsx                 # Full route tree with nested layouts + ProtectedRoute
+│   │   ├── routes.test.jsx            # Integration — 13 R1 route tests
+│   │   └── routes.release2.test.jsx   # Integration — 9 R2 route tests
+│   │
 │   ├── services/
-│   │   ├── coordinatorService.js
-│   │   ├── logbookService.js
-│   │   ├── orgService.js
-│   │   ├── studentService.js
-│   │   └── supervisorService.js
+│   │   ├── coordinatorService.js      # updateStudentStatus, rejectStudent, reinstateStudent
+│   │   ├── logbookService.js          # submitWeek, saveDailyLog, fetchWeeks
+│   │   ├── orgService.js              # fetchOrgProfile, updateVacancies, fetchApplications
+│   │   ├── studentService.js          # fetchProfile, uploadDocument, fetchAssessments
+│   │   └── supervisorService.js       # fetchStudents, approveWeek, flagWeek, submitReport
+│   │
+│   ├── utils/
+│   │   └── __tests__/
+│   │       └── validation.test.js     # Unit — 18 tests for isValidStudentId, isPasswordStrong
+│   │
 │   ├── views/
-│   │   ├── auth/            # Login, RegisterStudent, RegisterOrg, RegisterSupervisor,
-│   │   │                    # ForgotPassword, UpdatePassword, Unauthorized, NotFound
-│   │   ├── admin/           # CoordinatorDashboard, MatchEngine, PartnerRegistry,
-│   │   │                    # StudentRegistry, StudentAuditModal, SupervisorManagement
-│   │   ├── organization/    # Portal, OrgProfile, Requirements, OrgApplications
-│   │   ├── student/         # Dashboard, Profile, Preferences
-│   │   ├── supervisor/      # IndustrialSupervisorPortal, UniversitySupervisorPortal
-│   │   └── LandingPage.jsx
+│   │   ├── LandingPage.jsx            # Public marketing page with IntersectionObserver animations
+│   │   │
+│   │   ├── auth/
+│   │   │   ├── Login.jsx              # Email + password sign-in
+│   │   │   ├── Register.jsx           # Generic registration landing
+│   │   │   ├── RegisterChoice.jsx     # Student vs Org fork page
+│   │   │   ├── RegisterStudent.jsx    # UB email + student ID + password registration
+│   │   │   ├── RegisterOrg.jsx        # Organisation registration with industry select
+│   │   │   ├── RegisterSupervisor.jsx # Token-validated supervisor account creation
+│   │   │   ├── ForgetPassword.jsx     # Password reset email trigger
+│   │   │   ├── UpdatePassword.jsx     # New password form (from email link)
+│   │   │   ├── Unauthorized.jsx       # 403 — role not permitted for this route
+│   │   │   └── NotFound.jsx           # 404 — catch-all unknown routes
+│   │   │
+│   │   ├── admin/
+│   │   │   ├── CoordinatorDashboard.jsx   # Overview with StatCards and quick links
+│   │   │   ├── StudentRegistry.jsx        # Paginated student list with status filter
+│   │   │   ├── StudentAuditModal.jsx      # Per-student detail, doc links, status update
+│   │   │   ├── MatchEngine.jsx            # Scored student–vacancy suggestions UI
+│   │   │   ├── PartnerRegistry.jsx        # Organisation list with slide-out detail panel
+│   │   │   ├── PartnerDetailPanel.jsx     # Organisation detail slide-out (vacancies, supervisors)
+│   │   │   ├── SupervisorManagement.jsx   # Supervisor roster + invite flow
+│   │   │   └── InviteSupervisorModal.jsx  # Email invite modal with tokenised link generation
+│   │   │
+│   │   ├── organization/
+│   │   │   ├── Portal.jsx             # Employer dashboard — placement summary
+│   │   │   ├── OrgProfile.jsx         # Organisation profile editor
+│   │   │   ├── Requirements.jsx       # Vacancy editor — skills, GPA, slots, doc requirements
+│   │   │   └── OrgApplications.jsx    # Student applications per vacancy
+│   │   │
+│   │   ├── student/
+│   │   │   ├── Dashboard.jsx          # Placement card, visit timeline, rejection banner
+│   │   │   ├── Profile.jsx            # Academic identity — name, ID, GPA, document uploads
+│   │   │   ├── Preferences.jsx        # Career preferences — skills, roles, locations, stipend
+│   │   │   └── AssessmentReports.jsx  # Score visualisations — supervisor report + visit assessments
+│   │   │
+│   │   └── supervisor/
+│   │       ├── IndustrialSupervisorPortal.jsx   # Week review, approve, flag, performance report
+│   │       └── UniversitySupervisorPortal.jsx   # Logbook monitor, visit scheduling, assessments
+│   │
 │   ├── __tests__/
-│   │   ├── registration.test.jsx
-│   │   └── release2.acceptance.test.jsx
-│   ├── services/__tests__/
-│   │   ├── coordinatorService.test.js
-│   │   ├── coordinatorService.release2.test.js
-│   │   └── logbookService.test.js
-│   ├── utils/__tests__/
-│   │   └── validation.test.js
-│   └── setupTests.js
+│   │   ├── registration.test.jsx              # Acceptance — 12 R1 registration journey tests
+│   │   └── release2.acceptance.test.jsx       # Acceptance — 9 R2 rejection + supervisor tests
+│   │
+│   └── setupTests.js                          # Vitest global setup (@testing-library/jest-dom)
+│
 ├── supabase/
-│   └── functions/
-│       ├── match-engine/
-│       ├── send-supervisor-invite/
-│       ├── complete-supervisor-registration/
-│       ├── weekly-logbook-reminder/
-│       ├── send-visit-notification/
-│       └── send-student-status-notification/
+│   ├── functions/
+│   │   ├── match-engine/                      # Heuristic scoring + slot deduplication (v8)
+│   │   ├── send-supervisor-invite/            # Tokenised email invitation (v4)
+│   │   ├── complete-supervisor-registration/  # Token validation + account linking (v2)
+│   │   ├── weekly-logbook-reminder/           # Monday 05:00 UTC cron email (v1)
+│   │   ├── send-visit-notification/           # Visit scheduled → student email (v2)
+│   │   └── send-student-status-notification/  # Rejection email (v1)
+│   │
+│   └── migrations/
+│       ├── 001_iams_schema.sql  # Initial schema — profiles, preferences, placements, logbooks
+│       ├── 002_iams_schema.sql  # R2 additions — rejection status, visit assessments, supervisor reports
+│       └── 003_iams_schema.sql  # R3 addition — template_type column on daily_logs
+│
 ├── docs/
-│   ├── TESTING.md
-│   └── screenshots/
-├── .env.example
-├── vercel.json
-└── vite.config.js
+│   ├── TESTING.md               # Full test documentation — strategies, test tables, issues resolved
+│   └── screenshots/             # UI screenshots referenced in this README
+│       ├── landing.png
+│       ├── matching-engine.png
+│       ├── logbook.png
+│       ├── supervisor-review.png
+│       ├── visit-assessment.png
+│       └── logbook-pdf.png
+│
+├── public/
+│   ├── favicon.ico
+│   ├── favicon.svg
+│   └── apple-touch-icon.png
+│
+├── .env.example                 # Environment variable template
+├── vercel.json                  # SPA rewrite rule for React Router
+├── vite.config.js               # Vite config — React SWC plugin + Vitest setup
+└── eslint.config.js             # ESLint flat config with react-hooks + react-refresh
 ```
 
 ---
@@ -325,7 +436,7 @@ IAMS/
 | Node.js | ≥ 18.x |
 | npm | ≥ 9.x |
 | Supabase account | free tier sufficient |
-| Resend account | for email notifications |
+| Resend account | required for email notifications |
 
 ### Installation
 
@@ -339,7 +450,7 @@ npm install
 
 # Set up environment variables
 cp .env.example .env
-# Open .env and fill in your Supabase credentials
+# Edit .env and fill in your Supabase project URL and anon key
 
 # Start the development server
 npm run dev
@@ -350,9 +461,9 @@ The app runs at `http://localhost:5173`.
 ### Creating a Coordinator Account
 
 Coordinators cannot self-register through the public form. The database trigger
-`handle_new_user_role` runs automatically on every new user — if no role is
-set in the metadata it defaults to `coordinator`, so creating a user directly
-in the Supabase Dashboard is all you need.
+`handle_new_user_role` runs automatically on every new user — if no role is set
+in the metadata it defaults to `coordinator`, so creating a user directly in the
+Supabase Dashboard is all you need.
 
 **Step 1 — Create the auth account**
 
@@ -381,6 +492,7 @@ Coordinator Dashboard immediately.
 >
 > The `ON CONFLICT DO UPDATE` ensures it never duplicates — it either inserts
 > or corrects an existing wrong role. Safe to run multiple times.
+
 ### Running Tests
 
 ```bash
@@ -423,7 +535,7 @@ Set in **Supabase Dashboard → Edge Functions → Secrets** — not in `.env`:
 | `FROM_EMAIL` | ✅ | Verified sender — e.g. `IAMS <noreply@yourdomain.com>` |
 | `TEST_EMAIL_OVERRIDE` | Dev only | Routes all emails to this address during local testing |
 
-> **Local development:** Resend's `onboarding@resend.dev` sender only delivers to the Resend account owner's email. Set `TEST_EMAIL_OVERRIDE` to your own email to receive all notifications during testing. Remove it in production.
+> **Local development:** Resend's `onboarding@resend.dev` sender only delivers to the Resend account owner's email. Set `TEST_EMAIL_OVERRIDE` to your own email to receive all notifications during testing. Remove it before deploying to production.
 
 ---
 
@@ -433,45 +545,84 @@ Set in **Supabase Dashboard → Edge Functions → Secrets** — not in `.env`:
 
 1. Create a Supabase project at [supabase.com](https://supabase.com)
 2. Open **SQL Editor**
-3. Paste `supabase/migrations/001_iams_schema.sql` and run
+3. Run the migrations in order:
+   - `supabase/migrations/001_iams_schema.sql`
+   - `supabase/migrations/002_iams_schema.sql`
+   - `supabase/migrations/003_iams_schema.sql`
 
 ### Schema
 
 ```
-auth.users (Supabase managed)
+auth.users  (Supabase managed)
     │
-    ├── user_roles                         student | org | coordinator
-    │                                      industrial_supervisor | university_supervisor
-    ├── student_profiles                   full_name, student_id, gpa, cv_url,
-    │                                      transcript_url, status (enum)
-    ├── student_preferences                skills[], roles[], locations[]
-    ├── organization_profiles              org_name, industry, location,
-    │                                      requires_cv, requires_transcript
-    ├── organization_vacancies             role_title, required_skills[], min_gpa,
-    │                                      available_slots, is_active
-    ├── organization_supervisors           full_name, role_title, org_id, user_id
-    ├── university_supervisors             full_name, email, department, user_id
-    ├── supervisor_invitations             token, role, email, org_id, expires_at
-    └── placements
-        ├── logbook_weeks                  week_number, status, supervisor_comments,
-        │   ├── daily_logs                 stamped_by_name/title, approved_at
-        │   └── logbook_signatures         signed_by, signer_name, signed_at
-        ├── visit_assessments              visit_number, visit_date, status,
-        │                                  5 score columns, comments
-        └── supervisor_reports             5 score columns, strengths,
-                                           areas_for_improvement, recommend_for_employment
+    ├── user_roles                        student | org | coordinator
+    │                                     industrial_supervisor | university_supervisor
+    │
+    ├── student_profiles                  full_name, student_id, gpa, cv_url,
+    │                                     transcript_url, status (enum), avatar_url
+    │
+    ├── student_preferences               skills[], preferred_roles[], locations[],
+    │                                     min_stipend
+    │
+    ├── organization_profiles             org_name, industry, location, website,
+    │                                     contact_name, contact_email,
+    │                                     requires_cv, requires_transcript
+    │
+    ├── organization_vacancies            role_title, required_skills[], min_gpa,
+    │                                     available_slots, is_active
+    │
+    ├── organization_supervisors          full_name, role_title, org_id, user_id
+    │
+    ├── university_supervisors            full_name, email, department, user_id
+    │
+    ├── supervisor_invitations            token (uuid), role, email, org_id,
+    │                                     expires_at, used_at
+    │
+    └── placements                        student_id, org_id, vacancy_id,
+        │                                 ind_supervisor_id, uni_supervisor_id,
+        │                                 start_date, end_date
+        │
+        ├── logbook_weeks                 week_number, status, supervisor_comments,
+        │   │                             stamped_by_name, stamped_by_title,
+        │   │                             approved_at, submitted_at
+        │   │
+        │   ├── daily_logs               day_of_week, log_date, activities,
+        │   │                             hours_worked, reflection,
+        │   │                             template_type (standard | technical | soft_skills)
+        │   │
+        │   └── logbook_signatures       signed_by (user_id), signer_name,
+        │                                signer_title, signed_at
+        │
+        ├── visit_assessments            visit_number, visit_date, status,
+        │                                preparation_score, engagement_score,
+        │                                progress_score, professionalism_score,
+        │                                overall_score, comments
+        │
+        └── supervisor_reports           technical_score, initiative_score,
+                                         teamwork_score, reliability_score,
+                                         overall_score, strengths,
+                                         areas_for_improvement,
+                                         recommend_for_employment
 ```
 
 **`attachment_status` enum:** `pending | matched | allocated | completed | rejected`
+
+### Migrations
+
+| File | Release | Description |
+|---|---|---|
+| `001_iams_schema.sql` | R1 | Initial schema — all core tables, triggers, RLS policies, `is_coordinator()` function |
+| `002_iams_schema.sql` | R2 | Added `rejected` to `attachment_status` enum; `visit_assessments` table; `supervisor_reports` table |
+| `003_iams_schema.sql` | R3 | Added `template_type` column to `daily_logs` (standard / technical / soft_skills) with a safe default of `standard` |
 
 ### Key DB Objects
 
 | Object | Type | Purpose |
 |---|---|---|
-| `is_coordinator()` | `SECURITY DEFINER` Function | RLS policy helper — avoids JWT caching on coordinator checks |
-| `handle_new_user()` | Trigger | Creates profile row (`student_profiles` or `organization_profiles`) on signup |
-| `handle_new_user_role()` | Trigger | Inserts into `user_roles` on signup |
-| `decrement_vacancy_slots(id)` | RPC | Reduces `available_slots` by 1 after allocation, floor 0 |
+| `is_coordinator()` | `SECURITY DEFINER` Function | RLS policy helper — avoids JWT caching delay on coordinator role checks |
+| `handle_new_user()` | Trigger | Creates profile row (`student_profiles` or `organization_profiles`) on auth user insert |
+| `handle_new_user_role()` | Trigger | Inserts into `user_roles` on auth user insert; defaults to `coordinator` if no role in metadata |
+| `decrement_vacancy_slots(id)` | RPC | Reduces `available_slots` by 1 after allocation, floored at 0 |
 
 ### Weekly Logbook Reminder (pg_cron)
 
@@ -496,17 +647,20 @@ SELECT cron.schedule(
 
 ## Edge Functions
 
+All functions are deployed on the Deno runtime and located in `supabase/functions/`.
+
 | Function | Version | Trigger | Purpose |
 |---|---|---|---|
-| `match-engine` | v8 | Manual (coordinator) | Scores students vs vacancies, slot-aware deduplication |
-| `send-supervisor-invite` | v4 | On invite creation | Tokenised registration email to supervisor |
-| `complete-supervisor-registration` | v2 | On token submission | Creates account, links to roster |
-| `weekly-logbook-reminder` | v1 | pg_cron Monday 05:00 UTC | Email students with unsubmitted logbooks |
-| `send-visit-notification` | v2 | On visit schedule | Email student — date, supervisor, notes, CTA |
-| `send-student-status-notification` | v1 | On rejection | Email student with status and next steps |
+| `match-engine` | v8 | Manual (coordinator) | Scores students vs vacancies, slot-aware deduplication, blocks on missing docs |
+| `send-supervisor-invite` | v4 | On invite creation | Generates token, writes to `supervisor_invitations`, sends registration email |
+| `complete-supervisor-registration` | v2 | On token form submit | Validates token expiry, creates auth user, links to org roster, marks token used |
+| `weekly-logbook-reminder` | v1 | pg_cron Monday 05:00 UTC | Queries unsubmitted weeks, sends reminder email to each affected student |
+| `send-visit-notification` | v2 | On visit schedule | Emails student — visit date, supervisor name, notes, and portal CTA |
+| `send-student-status-notification` | v1 | On rejection | Emails student with rejection notice and next steps link |
+
+### Deploying Edge Functions
 
 ```bash
-# Deploy all functions
 supabase functions deploy match-engine
 supabase functions deploy send-supervisor-invite
 supabase functions deploy complete-supervisor-registration
@@ -523,20 +677,31 @@ supabase functions deploy send-student-status-notification
 
 | File | Type | Tests | Release | Covers |
 |---|---|---|---|---|
-| `src/utils/__tests__/validation.test.js` | Unit | 18 | R1 | `isValidStudentId`, `isPasswordStrong` |
-| `src/services/__tests__/coordinatorService.test.js` | Unit | 9 | R1 | `updateStudentStatus` lifecycle |
-| `src/services/__tests__/coordinatorService.release2.test.js` | Unit | 9 | R2 | `rejectStudent`, `reinstateStudent` |
-| `src/services/__tests__/logbookService.test.js` | Unit | 6 | R2 | `submitWeek` guard, approved week protection |
-| `src/routes/routes.test.jsx` | Integration | 13 | R1 | All R1 routes render correct component |
-| `src/routes/routes.release2.test.jsx` | Integration | 9 | R2 | All R2 routes, supervisor portal guards |
-| `src/__tests__/registration.test.jsx` | Acceptance | 12 | R1 | Student and org registration journeys |
-| `src/__tests__/release2.acceptance.test.jsx` | Acceptance | 9 | R2 | Rejection banner, reject flow, supervisor token |
+| `src/utils/__tests__/validation.test.js` | Unit | 18 | R1 | `isValidStudentId` (8 cases), `isPasswordStrong` (10 cases) |
+| `src/services/__tests__/coordinatorService.test.js` | Unit | 9 | R1 | `updateStudentStatus` — full lifecycle including RLS block simulation |
+| `src/services/__tests__/coordinatorService.release2.test.js` | Unit | 9 | R2 | `rejectStudent`, `reinstateStudent`, `rejected` status passthrough |
+| `src/services/__tests__/logbookService.test.js` | Unit | 6 | R2 | `submitWeek` guard — approved week protection, resubmission allowed |
+| `src/routes/routes.test.jsx` | Integration | 13 | R1 | All R1 routes render correct component with mocked auth and Supabase |
+| `src/routes/routes.release2.test.jsx` | Integration | 9 | R2 | All R2 routes, supervisor portal account-not-linked guard |
+| `src/__tests__/registration.test.jsx` | Acceptance | 12 | R1 | Student registration (US-01) and org registration (US-02) journeys |
+| `src/__tests__/release2.acceptance.test.jsx` | Acceptance | 9 | R2 | Rejection banner (US-06), coordinator reject flow, supervisor token (US-05) |
 
 **Definition of Done (per Section 3.7 of Sprint Planning):**
 
 - ✅ Unit, integration, and acceptance tests all passing
 - ✅ 0 failing — `npm run test` passes clean
-- ✅ Test files committed to `develop` alongside feature code
+- ✅ Test files committed to feature branch alongside feature code
+- ✅ `docs/TESTING.md` updated when new tests are added
+
+### Mocking Strategy
+
+| Concern | Strategy |
+|---|---|
+| Supabase client | Fully chainable mock using `vi.hoisted()` to avoid `ReferenceError` on hoisted `vi.mock()` calls |
+| ProtectedRoute | Bypassed in integration tests — all routes render directly |
+| AuthContext | Provides a fake `{ id: "test-user-id-123" }` user |
+| LandingPage | Stubbed with a `<h1>` in route tests — avoids `IntersectionObserver` (browser-only API) |
+| supervisorService | Returns `{ supervisor: null, students: [] }` so portals reach their guard state |
 
 ---
 
@@ -549,7 +714,7 @@ supabase functions deploy send-student-status-notification
 3. Add env vars: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
 4. Build settings (auto-detected): Framework = **Vite**, Output = `dist`
 
-`vercel.json` at project root (required for React Router):
+`vercel.json` rewrite rule (required for React Router client-side routing):
 
 ```json
 {
@@ -557,7 +722,7 @@ supabase functions deploy send-student-status-notification
 }
 ```
 
-### Backend — Supabase
+### Backend — Supabase Auth URL Configuration
 
 After deploying, update **Authentication → URL Configuration**:
 
@@ -573,8 +738,9 @@ Redirect URLs: https://your-app.vercel.app/**
 
 | Version | Date | Deliverables |
 |---|---|---|
-| **1.0 (MVP)** | April 10, 2026 | Auth, registration, heuristic matching engine, coordinator dashboard |
-| **2.0 (Final)** | May 4, 2026 | Weekly logbooks, supervisor portals, PDF export, rejection flow, visit scheduling, automated email, 83 tests |
+| **1.0 (MVP)** | April 10, 2026 | Auth, registration (student + org), heuristic matching engine, coordinator dashboard, student and org portals |
+| **2.0 (Final)** | May 4, 2026 | Weekly digital logbooks, industrial and university supervisor portals, PDF export, rejection flow, visit scheduling, performance reports, automated email notifications, 83 tests |
+| **2.1 (Patch)** | May 2026 | Three structured logbook entry templates (standard / technical / soft_skills), student assessment reports page, UI polish |
 
 ---
 
@@ -602,6 +768,7 @@ Status changes (approval, flagging, visit scheduling) only surface when the stud
 
 - Use Supabase Realtime subscriptions on `logbook_weeks.status` and `visit_assessments`.
 - Show a notification badge in the nav and a toast popup when the week status changes.
+- The `NotificationBell` component in the Navbar is already wired as a placeholder for this.
 
 ### Analytics Dashboard
 
@@ -638,7 +805,7 @@ Coordinator and supervisor accounts have elevated write access and should be bet
 
 At attachment end, a student self-assessment form would:
 
-- Use matching criteria to the industrial supervisor's performance report.
+- Use criteria matching the industrial supervisor's performance report.
 - Cross-reference student self-scores with supervisor scores to flag large discrepancies for coordinator review.
 
 ---
@@ -651,7 +818,7 @@ At attachment end, a student self-assessment form would:
 |---|---|
 | [Lucide React](https://lucide.dev) | All icons throughout the UI — tabbed logbook, supervisor stamp, status badges, and navigation use Lucide exclusively. Chosen for its open-source licence, accessibility, and consistent visual language. |
 | [React 19](https://react.dev) | Core UI framework. React 19's concurrent features and improved hooks power the auto-save logbook and real-time status updates. |
-| [Vite 7](https://vitejs.dev) | Build tooling. HMR during development, optimised production bundles, and native ESM support. |
+| [Vite 7](https://vitejs.dev) | Build tooling with SWC for fast transforms. HMR during development, optimised production bundles, and native ESM support. |
 | [Tailwind CSS v4](https://tailwindcss.com) | The entire design system — brand tokens, spacing scale, dark surfaces — is built on Tailwind's utility classes. |
 | [Supabase](https://supabase.com) | PostgreSQL with RLS, Auth, Storage, Edge Functions, and Realtime from a single SDK. |
 | [@react-pdf/renderer](https://react-pdf.org) | The legal logbook document with UB letterhead, tables, and signature blocks is rendered entirely in the browser. |
@@ -710,11 +877,11 @@ docs/readme-update
 ### Commit Format
 
 ```
-feat(logbook):  add PDF export with UB letterhead
-fix(auth):      resolve RLS policy for coordinator status check
-test(service):  add unit tests for submitWeek guard
-docs(readme):   update testing section for Release 2
-chore(deps):    add @react-pdf/renderer
+feat(logbook):   add PDF export with UB letterhead
+fix(auth):       resolve RLS policy for coordinator status check
+test(service):   add unit tests for submitWeek guard
+docs(readme):    update testing section for Release 2
+chore(deps):     add @react-pdf/renderer
 ```
 
 ### Pre-Merge Checklist
@@ -732,6 +899,5 @@ chore(deps):    add @react-pdf/renderer
 <br />
 
 Built with React, Supabase, and too much coffee
-
 
 </div>
