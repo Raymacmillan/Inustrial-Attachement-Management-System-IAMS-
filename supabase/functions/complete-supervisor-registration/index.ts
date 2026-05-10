@@ -30,6 +30,14 @@ serve(async (req) => {
     if (invError || !inv) throw new Error("Invitation not found.");
     if (inv.status === "accepted") throw new Error("This invitation has already been used.");
 
+    // Auto-confirm user email so they can sign in immediately
+    const { error: confirmError } = await supabase.auth.admin.updateUserById(
+      userId,
+      { email_confirm: true }
+    );
+
+    if (confirmError) throw new Error(`Failed to auto-confirm user: ${confirmError.message}`);
+
     // 2. Check the user doesn't already have a conflicting role
     const { data: existingRole } = await supabase
       .from("user_roles")
@@ -50,23 +58,26 @@ serve(async (req) => {
         .from("user_roles")
         .insert([{ user_id: userId, role: inv.supervisor_type }]);
 
-      // 23505 = duplicate — idempotent
       if (roleError && roleError.code !== "23505") throw roleError;
     }
 
     // 4. Link user_id to roster row
     if (inv.supervisor_type === "industrial_supervisor" && inv.org_supervisor_id) {
-      await supabase
+      const { error: linkError } = await supabase
         .from("organization_supervisors")
         .update({ user_id: userId, full_name: fullName, role_title: jobTitle })
         .eq("id", inv.org_supervisor_id);
+
+      if (linkError) throw linkError;
     }
 
     if (inv.supervisor_type === "university_supervisor" && inv.uni_supervisor_id) {
-      await supabase
+      const { error: linkError } = await supabase
         .from("university_supervisors")
         .update({ user_id: userId })
         .eq("id", inv.uni_supervisor_id);
+
+      if (linkError) throw linkError;
     }
 
     // 5. Mark invitation accepted
