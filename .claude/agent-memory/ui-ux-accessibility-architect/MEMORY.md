@@ -1,2 +1,0 @@
-- [Design tokens](design_tokens.md) — brand palette, semantic tokens (success/danger/warning), font-display, spacing conventions
-- [Recurring violations](recurring_violations.md) — systemic accessibility and consistency issues found across portals
