@@ -9,27 +9,41 @@ export function AvatarProvider({ children }) {
   const { user, userRole } = UserAuth();
   const [avatarUrl, setAvatarUrl] = useState(null);
   const [initials, setInitials] = useState("U");
-  const manuallySet = useRef(false);
+
+  // Tracks which userId the manually-uploaded avatar belongs to.
+  // Using a userId instead of a plain boolean means a different user
+  // signing in will never match, forcing a fresh load for their account.
+  const manualSetForUser = useRef(null);
 
   useEffect(() => {
-    if (!user?.id || !userRole) return;
-    if (manuallySet.current) return;
+    // User signed out — wipe the previous user's avatar immediately so it
+    // never leaks into the next user's session, and reset the manual flag.
+    if (!user?.id || !userRole) {
+      setAvatarUrl(null);
+      setInitials("U");
+      manualSetForUser.current = null;
+      return;
+    }
+
+    // The user just uploaded a new photo this session — skip the DB fetch
+    // so we don't overwrite their freshly-set image. Only skip when the
+    // manual set was for THIS specific user (not a previous account).
+    if (manualSetForUser.current === user.id) return;
 
     const load = async () => {
       try {
         let finalName = "";
-        let finalUrl = user?.user_metadata?.avatar_url || null;
+        let finalUrl  = user?.user_metadata?.avatar_url || null;
 
         if (userRole === "student") {
-          const profileData = await studentService.getStudentProfile(user.id);
-          finalName = profileData?.full_name || user?.user_metadata?.full_name || "";
-          finalUrl = profileData?.avatar_url || finalUrl;
+          const profile = await studentService.getStudentProfile(user.id);
+          finalName = profile?.full_name || user?.user_metadata?.full_name || "";
+          finalUrl  = profile?.avatar_url || finalUrl;
         } else if (userRole === "org") {
-          const profileData = await orgService.getOrgProfile(user.id);
-          finalName = profileData?.org_name || user?.user_metadata?.full_name || "Organization";
-          finalUrl = profileData?.avatar_url || finalUrl;
+          const profile = await orgService.getOrgProfile(user.id);
+          finalName = profile?.org_name || user?.user_metadata?.full_name || "Organization";
+          finalUrl  = profile?.avatar_url || finalUrl;
         } else {
-          // coordinator or other roles — use metadata only
           finalName = user?.user_metadata?.full_name || "";
         }
 
@@ -52,11 +66,12 @@ export function AvatarProvider({ children }) {
   }, [user?.id, userRole]);
 
   const refreshAvatar = (newUrl) => {
-    manuallySet.current = true;
+    // Stamp the current user's id so the effect knows this manual set
+    // belongs to them — not to any future user who signs in.
+    manualSetForUser.current = user?.id ?? null;
     setAvatarUrl(newUrl);
   };
 
-  // ← .Provider is required — <AvatarContext value={...}> only works in React 19 canary
   return (
     <AvatarContext.Provider value={{ avatarUrl, initials, refreshAvatar }}>
       {children}
