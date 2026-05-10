@@ -56,6 +56,27 @@ export default function LogbookModal({ week, onClose, onStatusUpdate }) {
     }
   };
 
+  const handleTemplateChange = async (logId, template) => {
+    const updatedDays = days.map((d) =>
+      d.id === logId ? { ...d, template_type: template } : d
+    );
+    setDays(updatedDays);
+    try {
+      await logbookService.updateDailyLog(logId, { template_type: template });
+    } catch (err) {
+      console.error("Template save failed", err);
+    }
+  };
+
+  const getDayLockReason = (day) => {
+    const logDate    = new Date(day.log_date + "T00:00:00");
+    const today      = new Date(); today.setHours(0, 0, 0, 0);
+    const isFuture   = logDate > today;
+    const isPreStart = week.start_date
+      ? logDate < new Date(week.start_date + "T00:00:00") : false;
+    return isFuture ? "future" : isPreStart ? "pre-start" : null;
+  };
+
   // Check for incomplete writable days before showing submit modal
   const handleSubmitClick = () => {
     setSubmitError("");
@@ -158,6 +179,7 @@ export default function LogbookModal({ week, onClose, onStatusUpdate }) {
             </div>
             <button
               onClick={onClose}
+              aria-label="Close logbook"
               className="p-2 hover:bg-gray-200 rounded-xl transition-colors text-gray-400
                 hover:text-brand-900 cursor-pointer"
             >
@@ -217,8 +239,9 @@ export default function LogbookModal({ week, onClose, onStatusUpdate }) {
                 key={currentDay.id}
                 day={currentDay}
                 onUpdate={handleUpdateDay}
+                onTemplateChange={handleTemplateChange}
                 isLocked={isLocked}
-                weekStartDate={week.start_date}
+                dayLockReason={getDayLockReason(currentDay)}
               />
             ) : null}
           </div>
@@ -247,6 +270,7 @@ export default function LogbookModal({ week, onClose, onStatusUpdate }) {
                   <button
                     onClick={() => setActiveIdx((i) => Math.max(0, i - 1))}
                     disabled={activeIdx === 0}
+                    aria-label="Previous day"
                     className="p-1.5 rounded-lg hover:bg-gray-200 text-gray-400
                       hover:text-brand-900 disabled:opacity-30 disabled:cursor-not-allowed
                       transition-colors cursor-pointer"
@@ -256,6 +280,7 @@ export default function LogbookModal({ week, onClose, onStatusUpdate }) {
                   <button
                     onClick={() => setActiveIdx((i) => Math.min(days.length - 1, i + 1))}
                     disabled={activeIdx === days.length - 1}
+                    aria-label="Next day"
                     className="p-1.5 rounded-lg hover:bg-gray-200 text-gray-400
                       hover:text-brand-900 disabled:opacity-30 disabled:cursor-not-allowed
                       transition-colors cursor-pointer"

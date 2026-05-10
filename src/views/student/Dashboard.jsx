@@ -64,7 +64,7 @@ export default function StudentDashboard() {
   };
 
   if (loading) return (
-    <div className="flex items-center justify-center min-h-[60vh]">
+    <div role="status" aria-live="polite" className="flex items-center justify-center min-h-[60vh]">
       <div className="animate-pulse text-brand-600 font-black text-xl tracking-tighter">
         SYNCHRONIZING PORTAL...
       </div>
@@ -197,7 +197,7 @@ export default function StudentDashboard() {
             </h2>
           </div>
 
-          <div className="bg-white border border-gray-100 rounded-lg shadow-sm overflow-hidden">
+          <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
 
             {/* Org header */}
             <div className="bg-brand-900 px-6 md:px-8 py-6 flex items-center gap-5">

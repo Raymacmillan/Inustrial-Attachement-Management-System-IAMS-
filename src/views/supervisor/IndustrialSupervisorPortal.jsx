@@ -13,40 +13,7 @@ import DigitalStamp from "../../components/ui/DigitalStamp";
 import EmptyState from "../../components/ui/EmptyState";
 import Textarea from "../../components/ui/Textarea";
 import ConfirmModal from "../../components/ui/ConfirmModal";
-
-// -- Score input (1–10) --------------------------------------------------------
-function ScoreInput({ label, value, onChange, disabled }) {
-  return (
-    <div className="space-y-1.5">
-      <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">
-        {label}
-      </label>
-      <div className="flex gap-1.5 flex-wrap">
-        {[...Array(10)].map((_, i) => {
-          const score = i + 1;
-          const active = value === score;
-          return (
-            <button
-              key={score}
-              type="button"
-              disabled={disabled}
-              onClick={() => onChange(score)}
-              className={`w-8 h-8 rounded-lg text-xs font-black transition-all cursor-pointer
-                ${active
-                  ? "bg-brand-600 text-white shadow-sm"
-                  : disabled
-                  ? "bg-gray-100 text-gray-300 cursor-not-allowed"
-                  : "bg-gray-100 text-gray-500 hover:bg-brand-100 hover:text-brand-600"
-                }`}
-            >
-              {score}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
+import ScoreInput   from "../../components/ui/ScoreInput";
 
 // -- Week review modal ---------------------------------------------------------
 function WeekReviewModal({ weekId, studentName, onClose, onUpdated }) {
