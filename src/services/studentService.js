@@ -180,3 +180,30 @@ export const updateStudentPreferences = async (studentId, preferences) => {
   if (error) throw error;
   return data;
 };
+
+/**
+ * @description Fetches visit assessments and industrial supervisor report for a placement.
+ * Returns { visitAssessments: [], supervisorReport: null } if nothing is available yet.
+ */
+export const getStudentAssessments = async (placementId) => {
+  const [visitResult, reportResult] = await Promise.all([
+    supabase
+      .from("visit_assessments")
+      .select("*")
+      .eq("placement_id", placementId)
+      .order("visit_number", { ascending: true }),
+    supabase
+      .from("supervisor_reports")
+      .select("*")
+      .eq("placement_id", placementId)
+      .maybeSingle(),
+  ]);
+
+  if (visitResult.error) throw visitResult.error;
+  if (reportResult.error && reportResult.error.code !== "PGRST116") throw reportResult.error;
+
+  return {
+    visitAssessments: visitResult.data ?? [],
+    supervisorReport: reportResult.data ?? null,
+  };
+};

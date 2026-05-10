@@ -127,16 +127,17 @@ export const logbookService = {
    * 4. Update a single daily log entry (auto-save on change).
    */
   updateDailyLog: async (logId, updates) => {
+    const payload = { updated_at: new Date().toISOString() };
+    if (updates.activity_details  !== undefined) payload.activity_details  = updates.activity_details;
+    if (updates.tasks_completed   !== undefined) payload.tasks_completed   = updates.tasks_completed;
+    if (updates.learning_outcomes !== undefined) payload.learning_outcomes = updates.learning_outcomes;
+    if (updates.challenges        !== undefined) payload.challenges        = updates.challenges;
+    if (updates.hours_worked      !== undefined) payload.hours_worked      = updates.hours_worked;
+    if (updates.template_type     !== undefined) payload.template_type     = updates.template_type;
+
     const { error } = await supabase
       .from("daily_logs")
-      .update({
-        activity_details:  updates.activity_details,
-        tasks_completed:   updates.tasks_completed,
-        learning_outcomes: updates.learning_outcomes,
-        challenges:        updates.challenges,
-        hours_worked:      updates.hours_worked,
-        updated_at:        new Date().toISOString(),
-      })
+      .update(payload)
       .eq("id", logId);
 
     if (error) throw error;

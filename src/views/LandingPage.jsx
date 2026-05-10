@@ -216,7 +216,7 @@ export default function LandingPage() {
               Sign In
             </button>
             <button
-              onClick={() => nav("/register/student")}
+              onClick={() => nav("/register")}
               className="text-sm font-black bg-brand-600 hover:bg-brand-500 text-white
                 px-5 py-2.5 rounded-xl transition-all shadow-lg shadow-brand-600/25
                 hover:shadow-brand-500/35 hover:-translate-y-px"
@@ -329,17 +329,17 @@ export default function LandingPage() {
           className="flex flex-col sm:flex-row items-center gap-4 mb-24"
         >
           <button
-            onClick={() => nav("/register/student")}
+            onClick={() => nav("/register")}
             className="group flex items-center gap-2.5 px-8 py-4 bg-brand-600
               hover:bg-brand-500 text-white font-black text-sm rounded-2xl
               transition-all shadow-xl shadow-brand-600/30
               hover:shadow-brand-500/40 hover:-translate-y-0.5"
           >
-            Register as Student
+            Register Now
             <ArrowRight size={15} className="transition-transform group-hover:translate-x-0.5" />
           </button>
           <button
-            onClick={() => nav("/register/org")}
+            onClick={() => nav("/register")}
             className="flex items-center gap-2.5 px-8 py-4 border border-[#1c3a63]
               bg-[#132848] hover:border-brand-600 hover:bg-[#0f2850] text-[#e8f0fc]
               font-bold text-sm rounded-2xl transition-all"
@@ -589,17 +589,17 @@ export default function LandingPage() {
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <button
-              onClick={() => nav("/register/student")}
+              onClick={() => nav("/register")}
               className="group flex items-center justify-center gap-2.5 px-10 py-4
                 bg-brand-600 hover:bg-brand-500 text-white font-black text-sm
                 rounded-2xl transition-all shadow-xl shadow-brand-600/30
                 hover:shadow-brand-500/40 hover:-translate-y-0.5"
             >
-              Start as Student
+              Get Started Free
               <ArrowRight size={15} className="transition-transform group-hover:translate-x-0.5" />
             </button>
             <button
-              onClick={() => nav("/register/org")}
+              onClick={() => nav("/register")}
               className="flex items-center justify-center gap-2.5 px-10 py-4
                 border border-[#1c3a63] bg-[#132848] hover:border-brand-600
                 hover:bg-[#0f2850] text-[#e8f0fc] font-bold text-sm rounded-2xl
@@ -630,9 +630,8 @@ export default function LandingPage() {
           </p>
           <div className="flex gap-6">
             {[
-              { label: "Sign In",   path: "/login" },
-              { label: "Student",   path: "/register/student" },
-              { label: "Partner",   path: "/register/org" },
+              { label: "Sign In",  path: "/login" },
+              { label: "Register", path: "/register" },
             ].map(({ label, path }) => (
               <button
                 key={label}

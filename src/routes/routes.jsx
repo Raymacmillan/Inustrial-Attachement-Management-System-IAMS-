@@ -22,7 +22,8 @@ import StudentDashboard  from "../views/student/Dashboard";
 import StudentPreferences from "../views/student/Preferences";
 import StudentProfile    from "../views/student/Profile";
 import StudentLayout     from "../components/layout/StudentLayout";
-import LogbookManager    from "../features/logbook/LogbookManager";
+import LogbookManager      from "../features/logbook/LogbookManager";
+import AssessmentReports   from "../views/student/AssessmentReports";
 
 // Organization Views
 import OrgPortal       from "../views/organization/Portal";
@@ -39,6 +40,7 @@ import StudentRegistry      from "../views/admin/StudentRegistry";
 import SupervisorManagement from "../views/admin/SupervisorManagement";
 
 // Supervisor Views (Release 2)
+import Register                  from "../views/auth/Register";
 import RegisterSupervisor       from "../views/auth/RegisterSupervisor";
 import IndustrialSupervisorPortal from "../views/supervisor/IndustrialSupervisorPortal";
 import UniversitySupervisorPortal from "../views/supervisor/UniversitySupervisorPortal";
@@ -55,6 +57,7 @@ export const router = createBrowserRouter([
 
       // ── Public Auth Routes ───────────────────────────────────────────────
       { path: "login",               element: <Login /> },
+      { path: "register",            element: <Register /> },
       { path: "register/student",    element: <RegisterStudent /> },
       { path: "register/org",        element: <RegisterOrg /> },
       { path: "register/supervisor", element: <RegisterSupervisor /> },
@@ -73,10 +76,11 @@ export const router = createBrowserRouter([
           </ProtectedRoute>
         ),
         children: [
-          { path: "dashboard",   element: <StudentDashboard /> },
-          { path: "profile",     element: <StudentProfile /> },
-          { path: "preferences", element: <StudentPreferences /> },
-          { path: "logbook",     element: <LogbookManager /> },
+          { path: "dashboard",    element: <StudentDashboard /> },
+          { path: "profile",      element: <StudentProfile /> },
+          { path: "preferences",  element: <StudentPreferences /> },
+          { path: "logbook",      element: <LogbookManager /> },
+          { path: "assessments",  element: <AssessmentReports /> },
         ],
       },
 

@@ -91,6 +91,14 @@ vi.mock("../components/ui/SegmentedControl", () => ({
   ),
 }));
 
+// ── studentService ────────────────────────────────────────────────────────────
+vi.mock("../services/studentService", () => ({
+  getStudentPlacement:   vi.fn().mockResolvedValue(null),
+  getStudentProfile:     vi.fn().mockResolvedValue(null),
+  getStudentPreferences: vi.fn().mockResolvedValue(null),
+  getStudentAssessments: vi.fn().mockResolvedValue({ visitAssessments: [], supervisorReport: null }),
+}));
+
 // ── supervisorService ─────────────────────────────────────────────────────────
 vi.mock("../services/supervisorService", () => ({
   supervisorService: {
@@ -125,6 +133,7 @@ import IndustrialSupervisorPortal from "../views/supervisor/IndustrialSupervisor
 import UniversitySupervisorPortal from "../views/supervisor/UniversitySupervisorPortal";
 import RegisterSupervisor         from "../views/auth/RegisterSupervisor";
 import NotFound                   from "../views/auth/NotFound";
+import AssessmentReports          from "../views/student/AssessmentReports";
 
 // ── Helper ────────────────────────────────────────────────────────────────────
 const renderAt = (path, routes) => {
@@ -206,6 +215,15 @@ describe("Release 2 — new routes render correct component", () => {
     ]);
     await expect(
       screen.findByText(/no invitation token/i)
+    ).resolves.toBeTruthy();
+  });
+
+  it("/student/assessments renders AssessmentReports — no placement empty state", async () => {
+    renderAt("/student/assessments", [
+      { path: "/student/assessments", element: <AssessmentReports /> },
+    ]);
+    await expect(
+      screen.findByText(/no active placement/i)
     ).resolves.toBeTruthy();
   });
 

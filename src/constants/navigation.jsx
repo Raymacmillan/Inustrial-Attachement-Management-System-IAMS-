@@ -10,6 +10,7 @@ import {
   BookOpen,
   FileText,
   UserPlus,
+  ClipboardCheck,
 } from "lucide-react";
 
 const ICON_SIZE = 20;
@@ -19,6 +20,7 @@ export const NAV_LINKS = {
     { name: "My Dashboard",       path: "/student/dashboard",   icon: <LayoutDashboard size={ICON_SIZE} /> },
     { name: "Career Preferences", path: "/student/preferences", icon: <Briefcase       size={ICON_SIZE} /> },
     { name: "Weekly Logbook",     path: "/student/logbook",     icon: <ClipboardList   size={ICON_SIZE} /> },
+    { name: "Assessment Reports", path: "/student/assessments", icon: <ClipboardCheck  size={ICON_SIZE} /> },
     { name: "My Profile",         path: "/student/profile",     icon: <User            size={ICON_SIZE} /> },
   ],
 

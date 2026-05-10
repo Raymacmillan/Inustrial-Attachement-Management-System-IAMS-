@@ -6,6 +6,7 @@ import * as studentService from "../../services/studentService";
 import Input from "../../components/ui/Input";
 import Button from "../../components/ui/Button";
 import { UB_MAJORS } from "../../constants/matchingOptions";
+import ConfirmModal from "../../components/ui/ConfirmModal";
 import {
   Save, X, User, BookOpen, Upload, ArrowLeft,
   CheckCircle, AlertCircle, ChevronDown, Target,
@@ -30,9 +31,10 @@ export default function StudentProfile() {
   const { user }          = UserAuth();
   const { refreshAvatar } = useAvatar();
   const navigate          = useNavigate();
-  const [loading, setLoading] = useState(true);
-  const [saving,  setSaving]  = useState(false);
-  const [message, setMessage] = useState({ type: "", text: "" });
+  const [loading,        setLoading]        = useState(true);
+  const [saving,         setSaving]         = useState(false);
+  const [message,        setMessage]        = useState({ type: "", text: "" });
+  const [deleteTarget,   setDeleteTarget]   = useState(null);
 
   const [formData, setFormData] = useState({
     full_name:           "",
@@ -94,8 +96,11 @@ export default function StudentProfile() {
     }
   };
 
-  const handleDeleteDoc = async (bucket) => {
-    if (!window.confirm(`Remove this ${bucket === "cvs" ? "CV" : "Transcript"}?`)) return;
+  const handleDeleteDoc = (bucket) => setDeleteTarget(bucket);
+
+  const confirmDeleteDoc = async () => {
+    const bucket = deleteTarget;
+    setDeleteTarget(null);
     setSaving(true);
     try {
       await studentService.deleteDocument(user.id, bucket);
@@ -370,6 +375,16 @@ export default function StudentProfile() {
           </div>
         </div>
       </form>
+
+      <ConfirmModal
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={confirmDeleteDoc}
+        title={`Remove ${deleteTarget === "cvs" ? "CV" : "Transcript"}?`}
+        message="This file will be deleted from your profile. You can re-upload a new version at any time."
+        confirmText="Remove Document"
+        type="danger"
+      />
     </div>
   );
 }
