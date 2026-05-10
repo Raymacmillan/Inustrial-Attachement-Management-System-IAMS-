@@ -7,7 +7,6 @@ import RouteErrorPage from "../components/ui/RouteErrorPage";
 
 // Auth Views
 import Login           from "../views/auth/Login";
-import RegisterChoice from "../views/auth/RegisterChoice";
 import RegisterStudent from "../views/auth/RegisterStudent";
 import RegisterOrg     from "../views/auth/RegisterOrg";
 import Unauthorized    from "../views/auth/Unauthorized";
@@ -58,11 +57,7 @@ export const router = createBrowserRouter([
 
       // ── Public Auth Routes ───────────────────────────────────────────────
       { path: "login",               element: <Login /> },
-<<<<<<< HEAD
-      { path: "register",            element: <RegisterChoice /> },
-=======
       { path: "register",            element: <Register /> },
->>>>>>> develop
       { path: "register/student",    element: <RegisterStudent /> },
       { path: "register/org",        element: <RegisterOrg /> },
       { path: "register/supervisor", element: <RegisterSupervisor /> },
